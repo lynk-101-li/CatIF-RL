@@ -1,0 +1,9 @@
+{
+    "description": "Fixed catalytic residues for the salutaridine reductase (SalR) motif-preserving redesign case study. Indices are 0-based for direct use with the --mask CLI flag of catif_rl.sampling.inpaint.",
+    "fixed_positions_zero_based": [151, 179, 235, 239],
+    "fixed_positions_one_based": [152, 180, 236, 240],
+    "residue_identities": ["N", "S", "Y", "K"],
+    "residue_labels_one_based": ["Asn152", "Ser180", "Tyr236", "Lys240"],
+    "functional_role": "Catalytic / proton-transfer triad of the SalR active site.",
+    "reference": "Geissler, R.; Brandt, W.; Ziegler, J. Molecular Modeling and Site-Directed Mutagenesis Reveal the Benzylisoquinoline Binding Site of the Short-Chain Dehydrogenase/Reductase Salutaridine Reductase. Plant Physiol. 143, 1493-1503 (2007). DOI: 10.1104/pp.106.095166"
+}

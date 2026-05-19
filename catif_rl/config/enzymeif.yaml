@@ -1,0 +1,47 @@
+# EnzymeIF supervised training configuration (Supporting Information Table S1).
+# Selected checkpoint: epoch 467 (lowest validation cross-entropy).
+# Hardware used by the authors: NVIDIA RTX 4090 24 GB (AutoDL cloud).
+
+run:
+  name: enzymeif
+  date_tag: Jul01
+  output_dir: runs/enzymeif
+
+dataset:
+  source: enzyme_plus_cath_regularizer
+  train_split: data/process/train
+  valid_split: data/process/valid
+  enzyme_train_count: 5661        # DLKcat-BRENDA filtered
+  cath_regularizer_count: 18021   # CATH v4.2.0
+  valid_enzyme_count: 629
+  valid_cath_count: 608
+
+architecture:
+  backbone: egnn_gradeif
+  depth: 6
+  hidden_channels: 128
+  embedding: true
+  embedding_dim: 128
+  norm_feat: true
+  embed_ss: -1                    # disabled
+  noise_type: blosum
+  timesteps: 500
+  objective: cross_entropy_clean_x0
+
+optimizer:
+  name: Adam
+  lr: 5.0e-4
+  weight_decay: 1.0e-5
+  betas: [0.9, 0.999]
+
+regularization:
+  dropout: 0.1
+  grad_clip_norm: 1.0
+  ema_decay: 0.995
+
+training:
+  batch_size: 32
+  max_epochs: 500                 # author trained beyond this; epoch 467 selected
+  checkpoint_selection: lowest_val_loss
+  save_every_n_epochs: 1
+  seed: 42

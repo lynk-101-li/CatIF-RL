@@ -1,0 +1,18 @@
+# Discrete subgraph inpainting defaults — Algorithm S1 (BLOSUM iterative-fusion variant).
+# Used by case_study/EC1.1.1.248_SalR/ (salutaridine reductase) and any other
+# motif-preserving partial-redesign job.
+
+sampling:
+  total_timesteps: 500          # T (matches CatIF training)
+  ddim_stride: 50               # Delta
+  resampling_depth: 5           # U — iterative-fusion rounds per outer step
+  diverse_decoding: true        # stochastic categorical sample at final step
+  noise_type: blosum            # CatIF policy was trained under the BLOSUM kernel
+
+mask:
+  # Mask convention (manuscript §2.6):
+  #   m_i = 1  -> position i is fixed to the native residue
+  #   m_i = 0  -> position i is designable
+  # Provide via --mask CLI flag as a comma-separated list of designable indices
+  # (0-based), e.g. "5,10-20,35".
+  index_convention: zero_based

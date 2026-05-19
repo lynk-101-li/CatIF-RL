@@ -1,0 +1,71 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- OS junk ---
+.DS_Store
+._*
+Thumbs.db
+
+# --- Editors / IDE ---
+.idea/
+.vscode/
+*.swp
+*~
+
+# --- Virtual environments / secrets ---
+.env
+.venv/
+venv/
+env/
+
+# --- Local planning / archive (not for publication) ---
+_archive_v1/
+REPO_LAYOUT_PLAN*.md
+.claude/
+.cursor/
+
+# --- External upstream repos (cloned by scripts/00_setup_external.sh) ---
+external/GraDe_IF/
+external/DLKcat5/
+external/UniKP/
+external/CataPro-master/
+external/ESMFold/
+
+# --- Large data assets (download via data/README.md instructions) ---
+data/raw/
+data/process/
+data/brenda/
+data/enzyme_train_and_valid_dataset/
+data/reward/
+data/cath40*/
+*.pdb
+!case_study/**/*.pdb
+!case_study/**/native.pdb
+
+# --- Trained model checkpoints (download via checkpoints/README.md) ---
+checkpoints/*.pt
+checkpoints/*.pth
+checkpoints/*.bin
+
+# --- Runtime outputs from local runs ---
+runs/
+outputs/
+results/
+*.log
+nohup.out
+wandb/
+
+# --- Don't ship the user's PyTorch tensor assets that are large ---
+# (the small precomputed BLOSUM and mean_attr tensors under catif_rl/data/assets/ ARE shipped)
+catif_rl/data/assets/*.pt.bak

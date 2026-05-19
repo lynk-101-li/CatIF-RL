@@ -1,0 +1,47 @@
+# CatIF supervised training configuration (Supporting Information Table S2).
+# Selected checkpoint: epoch 228 (lowest validation cross-entropy).
+# Trained from scratch on the 6,034 activity-positive GDC variants; NOT a
+# continuation of EnzymeIF.
+# Hardware used by the authors: NVIDIA RTX 5060 Ti 16 GB (local).
+
+run:
+  name: catif
+  date_tag: Sep24
+  output_dir: runs/catif
+
+dataset:
+  source: gdc_activity_positive_variants
+  train_split: data/process/gdc_positive   # the 6,034 curated variants
+  valid_split: data/process/valid_gdc      # held-out validation subset
+  positive_count: 6034
+
+architecture:
+  backbone: egnn_gradeif
+  depth: 6
+  hidden_channels: 128
+  embedding: true
+  embedding_dim: 128
+  norm_feat: true
+  embed_ss: -1                    # disabled
+  noise_type: blosum
+  timesteps: 500
+  objective: cross_entropy_clean_x0
+
+optimizer:
+  name: Adam
+  lr: 5.0e-4
+  weight_decay: 1.0e-5
+  betas: [0.9, 0.999]
+
+regularization:
+  dropout: 0.1
+  grad_clip_norm: 1.0
+  ema_decay: 0.995
+
+training:
+  batch_size: 32
+  max_epochs: 300                 # author trained beyond this; epoch 228 selected
+  checkpoint_selection: lowest_val_loss
+  save_every_n_epochs: 1
+  seed: 42
+  init_from_scratch: true         # NOT warm-started from EnzymeIF
