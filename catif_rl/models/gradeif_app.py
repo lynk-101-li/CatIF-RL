@@ -1,3 +1,9 @@
+"""GraDe-IF application wrapper (adapted with local modifications).
+
+Adapted from https://github.com/ykiiiiii/GraDe_IF (Yi et al., NeurIPS 2023).
+The upstream source does not ship an explicit license; this adaptation is
+released for academic, non-commercial research use only.
+"""
 
 import os
 import argparse

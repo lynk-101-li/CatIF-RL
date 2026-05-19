@@ -120,7 +120,16 @@ Training data and trained policy weights are too large for git and are archived 
 
 ## License
 
-This project is released under the [MIT License](LICENSE). The upstream backbone repository [GraDe-IF](https://github.com/ykiiiiii/GraDe_IF) and the three reward predictors ([DLKcat](https://github.com/SysBioChalmers/DLKcat), [UniKP](https://github.com/Luo-SynBioLab/UniKP), [CataPro](https://github.com/zchwang/CataPro)) are cloned at install time and remain under their respective upstream licenses; see `external/README.md` and `docs/external_dependencies.md` for details.
+This project's source code is released under the [MIT License](LICENSE).
+
+Several upstream components and data sources are governed by other terms:
+
+- The graph-diffusion backbone [GraDe-IF](https://github.com/ykiiiiii/GraDe_IF) and the [UniKP](https://github.com/Luo-SynBioLab/UniKP) kinetic predictor do not currently ship an explicit license — this repository depends on them under academic, non-commercial research conventions.
+- [DLKcat](https://github.com/SysBioChalmers/DLKcat) is released under GPL v3 and is invoked here only via subprocess.
+- [CataPro](https://github.com/zchwang/CataPro) is MIT-licensed.
+- The training data is derived from BRENDA (CC BY 4.0 Non-Commercial); BRENDA records are **not** redistributed in this repository.
+
+Per-component status, references, and the obligations they imply are documented in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). See also `external/README.md` and `docs/external_dependencies.md` for the install-time clone instructions.
 
 ## Acknowledgments
 

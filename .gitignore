@@ -32,8 +32,6 @@ env/
 # --- Local planning / archive (not for publication) ---
 _archive_v1/
 REPO_LAYOUT_PLAN*.md
-.claude/
-.cursor/
 
 # --- External upstream repos (cloned by scripts/00_setup_external.sh) ---
 external/GraDe_IF/

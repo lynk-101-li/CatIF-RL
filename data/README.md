@@ -49,3 +49,23 @@ bash scripts/01_build_dataset.sh
 
 Detailed dataset construction is described in the manuscript's Supporting
 Information Section S1 (extended methods) and Table S4 (leakage control).
+
+## License and attribution
+
+The training data are derived from BRENDA
+(<https://www.brenda-enzymes.org/>; Schomburg et al., *Nucleic Acids Res.*
+49, D498-D508, 2021), released under **CC BY 4.0 Non-Commercial**.
+
+This repository does **not** redistribute BRENDA records or the derived
+DLKcat splits. Users must obtain BRENDA records directly from the BRENDA
+website in accordance with BRENDA's terms of use. Processed graph datasets
+reconstructed by `scripts/01_build_dataset.sh` inherit the CC BY-NC 4.0
+restriction and may be used only for non-commercial research purposes.
+
+CATH v4.2.0 (Sillitoe et al., *Nucleic Acids Res.* 49, D266-D273, 2021)
+is distributed under CC BY 4.0 and is freely usable for both commercial and
+non-commercial purposes; this repository likewise does not redistribute the
+CATH archive, only references it.
+
+See [`../THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md) for the full
+per-component license summary.
