@@ -1,0 +1,57 @@
+cff-version: 1.2.0
+message: "If you use CatIF-RL in your research, please cite the accompanying preprint."
+title: "CatIF-RL: Activity-Oriented Enzyme Sequence Design by Steered Inverse Protein Folding"
+type: software
+authors:
+  - family-names: Li
+    given-names: Yanheng
+    affiliation: "Beijing Institute of Technology"
+    orcid: "https://orcid.org/0009-0009-3101-2673"
+    email: 3120241423@bit.edu.cn
+  - family-names: Xiong
+    given-names: Jialong
+    affiliation: "Beijing Institute of Technology"
+    email: 3120256169@bit.edu.cn
+  - family-names: Zhang
+    given-names: Yuxin
+    affiliation: "Beijing Institute of Technology"
+    email: 3120251459@bit.edu.cn
+  - family-names: Cai
+    given-names: Tong
+    affiliation: "Beijing Institute of Technology"
+    email: 1120223050@bit.edu.cn
+  - family-names: Gong
+    given-names: Xinqi
+    affiliation: "Renmin University of China"
+    orcid: "https://orcid.org/0000-0003-2802-6176"
+    email: xinqigong@ruc.edu.cn
+  - family-names: Wang
+    given-names: Feng
+    affiliation: "Beijing Institute of Technology"
+    orcid: "https://orcid.org/0000-0002-9403-4337"
+    email: wfeng@bit.edu.cn
+license: MIT
+repository-code: "https://github.com/lynk-101-li/CatIF-RL"
+preferred-citation:
+  type: article
+  title: "CatIF-RL: Activity-Oriented Enzyme Sequence Design by Steered Inverse Protein Folding"
+  authors:
+    - family-names: Li
+      given-names: Yanheng
+      orcid: "https://orcid.org/0009-0009-3101-2673"
+    - family-names: Xiong
+      given-names: Jialong
+    - family-names: Zhang
+      given-names: Yuxin
+    - family-names: Cai
+      given-names: Tong
+    - family-names: Gong
+      given-names: Xinqi
+      orcid: "https://orcid.org/0000-0003-2802-6176"
+    - family-names: Wang
+      given-names: Feng
+      orcid: "https://orcid.org/0000-0002-9403-4337"
+  journal: "bioRxiv"
+  year: 2026
+  doi: "10.64898/2026.05.11.724288"
+  url: "https://www.biorxiv.org/content/10.64898/2026.05.11.724288"
