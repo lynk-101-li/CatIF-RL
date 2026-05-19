@@ -1,5 +1,10 @@
 # CatIF-RL
 
+[![bioRxiv](https://img.shields.io/badge/bioRxiv-10.64898%2F2026.05.11.724288-b00.svg)](https://doi.org/10.64898/2026.05.11.724288)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.10](https://img.shields.io/badge/python-3.10-blue.svg)](https://www.python.org/downloads/)
+[![smoke](https://github.com/lynk-101-li/CatIF-RL/actions/workflows/smoke.yml/badge.svg)](https://github.com/lynk-101-li/CatIF-RL/actions/workflows/smoke.yml)
+
 **Activity-Oriented Enzyme Sequence Design by Steered Inverse Protein Folding**
 
 CatIF-RL is a reinforcement-learning framework that fine-tunes a graph-based discrete-diffusion inverse-folding policy toward enzymes with higher predicted catalytic activity. The pipeline iterates:
