@@ -15,22 +15,16 @@ the obligations they imply for downstream users of this repository.
 - **Reference**: Yi, K.; Zhou, B.; Shen, Y.; Lio, P.; Wang, Y. G.
   *Graph Denoising Diffusion for Inverse Protein Folding*. NeurIPS 2023.
 - **Upstream license**: **NONE PROVIDED**.
-- **How CatIF-RL uses it**:
-  - The graph-diffusion backbone (`diffusion.utils`,
-    `diffusion.model.egnn_pytorch.*`) is cloned at install time into
-    `external/GraDe_IF/` and loaded onto `sys.path` by
-    `catif_rl/models/gradeif_adapter.py`. No upstream source is mirrored
-    in this repository.
-  - The single exception is `catif_rl/models/gradeif_app.py`, an
-    application wrapper containing minor local modifications used to train
-    EnzymeIF, CatIF, and CatIF-RL. The file carries a header attributing
-    the upstream work and stating the academic-use restriction.
+- **How CatIF-RL uses it**: The graph-diffusion backbone
+  (`diffusion.utils`, `diffusion.model.egnn_pytorch.*`) is cloned at
+  install time into `external/GraDe_IF/` and loaded onto `sys.path` by
+  `catif_rl/models/gradeif_adapter.py`. No upstream source is mirrored
+  in this repository.
 - **Implications**: The upstream repository does not ship an explicit
-  license. CatIF-RL uses GraDe-IF, and ships the modified application
-  wrapper, under academic citation conventions for non-commercial research
-  use. Users wishing to redistribute derivatives, or to use the GraDe-IF
-  architecture commercially, should contact the GraDe-IF authors for
-  clarification.
+  license. This repository cites GraDe-IF in the accompanying manuscript
+  and clones it at install time under academic citation conventions for
+  non-commercial research use. Users wishing to use GraDe-IF commercially
+  should contact the GraDe-IF authors directly.
 
 ### 1.2 UniKP
 
@@ -42,8 +36,9 @@ the obligations they imply for downstream users of this repository.
 - **How CatIF-RL uses it**: UniKP is cloned at install time into
   `external/UniKP/` and invoked only via subprocess by
   `catif_rl/reward/predictors/unikp.py`. No UniKP source is mirrored.
-- **Implications**: Same posture as GraDe-IF -- academic, non-commercial
-  research use until upstream publishes an explicit license.
+- **Implications**: Same posture as GraDe-IF -- academic citation
+  conventions for non-commercial research use; users wishing to use UniKP
+  commercially should contact the UniKP authors directly.
 
 ### 1.3 DLKcat
 
@@ -122,7 +117,7 @@ the obligations they imply for downstream users of this repository.
 
 | Component | Kind | Upstream license | Effect on CatIF-RL repository |
 |---|---|---|---|
-| GraDe-IF | code | none | Academic, non-commercial research use; `gradeif_app.py` adaptation shipped with header attribution |
+| GraDe-IF | code | none | Cloned at install time; academic citation conventions for non-commercial research use |
 | UniKP | code | none | Subprocess-only; no source mirrored |
 | DLKcat | code | GPL v3 | Subprocess wrapper exempt from static-link clause |
 | CataPro | code | MIT | Fully compatible |

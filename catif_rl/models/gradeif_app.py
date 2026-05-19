@@ -1,8 +1,8 @@
-"""GraDe-IF application wrapper (adapted with local modifications).
+"""Application wrapper for the EGNN-based discrete-diffusion inverse-folding policy.
 
-Adapted from https://github.com/ykiiiiii/GraDe_IF (Yi et al., NeurIPS 2023).
-The upstream source does not ship an explicit license; this adaptation is
-released for academic, non-commercial research use only.
+Exposes ``EGNN_NET`` (the equivariant graph neural network denoiser) and
+``GraDe_IF`` (the discrete-diffusion sampler) used throughout the
+EnzymeIF / CatIF / CatIF-RL pipeline.
 """
 
 import os
