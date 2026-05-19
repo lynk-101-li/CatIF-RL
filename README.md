@@ -123,9 +123,10 @@ Training data and trained policy weights are too large for git and are archived 
 If you use CatIF-RL in your research, please cite the preprint:
 
 ```
-Li, Y.; Xiong, J.; Zhang, Y.; Cai, T.; Gong, X.; Wang, F.
-CatIF-RL: Activity-Oriented Enzyme Sequence Design by Steered Inverse
-Protein Folding. bioRxiv 2026. DOI: 10.64898/2026.05.11.724288.
+Li, Y.; Xiong, J.; Zhang, Y.; Cai, T.; Fu, C.; Li, S.; Xu, W.; Lyu, R.;
+Chen, Z.; Guo, Z.; Gong, X.; Wang, F. CatIF-RL: Activity-Oriented Enzyme
+Sequence Design by Steered Inverse Protein Folding. bioRxiv 2026.
+DOI: 10.64898/2026.05.11.724288.
 ```
 
 BibTeX:
@@ -133,7 +134,7 @@ BibTeX:
 ```bibtex
 @article{li2026catifrl,
   title   = {CatIF-RL: Activity-Oriented Enzyme Sequence Design by Steered Inverse Protein Folding},
-  author  = {Li, Yanheng and Xiong, Jialong and Zhang, Yuxin and Cai, Tong and Gong, Xinqi and Wang, Feng},
+  author  = {Li, Yanheng and Xiong, Jialong and Zhang, Yuxin and Cai, Tong and Fu, Chuan and Li, Shutong and Xu, Wei and Lyu, Ruoyi and Chen, Zhaoyang and Guo, Zheng and Gong, Xinqi and Wang, Feng},
   journal = {bioRxiv},
   year    = {2026},
   doi     = {10.64898/2026.05.11.724288},

@@ -5,31 +5,31 @@ type: software
 authors:
   - family-names: Li
     given-names: Yanheng
-    affiliation: "Beijing Institute of Technology"
     orcid: "https://orcid.org/0009-0009-3101-2673"
-    email: 3120241423@bit.edu.cn
   - family-names: Xiong
     given-names: Jialong
-    affiliation: "Beijing Institute of Technology"
-    email: 3120256169@bit.edu.cn
   - family-names: Zhang
     given-names: Yuxin
-    affiliation: "Beijing Institute of Technology"
-    email: 3120251459@bit.edu.cn
   - family-names: Cai
     given-names: Tong
-    affiliation: "Beijing Institute of Technology"
-    email: 1120223050@bit.edu.cn
+  - family-names: Fu
+    given-names: Chuan
+  - family-names: Li
+    given-names: Shutong
+  - family-names: Xu
+    given-names: Wei
+  - family-names: Lyu
+    given-names: Ruoyi
+  - family-names: Chen
+    given-names: Zhaoyang
+  - family-names: Guo
+    given-names: Zheng
   - family-names: Gong
     given-names: Xinqi
-    affiliation: "Renmin University of China"
     orcid: "https://orcid.org/0000-0003-2802-6176"
-    email: xinqigong@ruc.edu.cn
   - family-names: Wang
     given-names: Feng
-    affiliation: "Beijing Institute of Technology"
     orcid: "https://orcid.org/0000-0002-9403-4337"
-    email: wfeng@bit.edu.cn
 license: MIT
 repository-code: "https://github.com/lynk-101-li/CatIF-RL"
 preferred-citation:
@@ -45,6 +45,18 @@ preferred-citation:
       given-names: Yuxin
     - family-names: Cai
       given-names: Tong
+    - family-names: Fu
+      given-names: Chuan
+    - family-names: Li
+      given-names: Shutong
+    - family-names: Xu
+      given-names: Wei
+    - family-names: Lyu
+      given-names: Ruoyi
+    - family-names: Chen
+      given-names: Zhaoyang
+    - family-names: Guo
+      given-names: Zheng
     - family-names: Gong
       given-names: Xinqi
       orcid: "https://orcid.org/0000-0003-2802-6176"
