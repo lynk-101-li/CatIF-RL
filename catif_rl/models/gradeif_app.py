@@ -3,6 +3,9 @@
 Exposes ``EGNN_NET`` (the equivariant graph neural network denoiser) and
 ``GraDe_IF`` (the discrete-diffusion sampler) used throughout the
 EnzymeIF / CatIF / CatIF-RL pipeline.
+
+Adapted with local modifications from GraDe-IF (Yi et al., NeurIPS 2023),
+https://github.com/ykiiiiii/GraDe_IF, distributed under the MIT License.
 """
 
 import os
