@@ -60,14 +60,25 @@ data/
 
 ### What is in the Zenodo deposit vs. what gets fetched on first run
 
-The Zenodo deposit at <https://doi.org/10.5281/zenodo.XXXXXXX> (link added
-once the deposit is finalised) contains only the **author-original** PDBs
-and CSVs: native enzyme structures, GDC-curated mutant structures, the
-held-out test set, the GDC variant table, and the per-round RL reward
-files. The CATH v4.2.0 PDBs are **not** redistributed; they are downloaded
-on first run from RCSB via `catif_rl/data/download_pdb.py`, using the
-chain manifest `catif_rl/data/assets/chain_set_splits.json` (originally
-from GraDe-IF; CATH itself is CC BY 4.0).
+The Zenodo deposit at <https://doi.org/10.5281/zenodo.20357062> (concept
+DOI; always resolves to the latest version) contains only the
+**author-original** PDBs and CSVs: native enzyme structures, GDC-curated
+mutant structures, the held-out test set, the GDC variant table, and the
+per-round RL reward files. The CATH v4.2.0 PDBs are **not** redistributed;
+they are downloaded on first run from RCSB via
+`catif_rl/data/download_pdb.py`, using the chain manifest
+`catif_rl/data/assets/chain_set_splits.json` (originally from GraDe-IF;
+CATH itself is CC BY 4.0).
+
+To download the deposit (v0.1.0 snapshot DOI: 10.5281/zenodo.20357063):
+
+```bash
+# 823 MB (decimal) of native + GDC-mutant + test PDBs and supporting CSVs
+wget https://zenodo.org/records/20357063/files/catif_rl_data_v0.1.0.tar.gz
+wget https://zenodo.org/records/20357063/files/catif_rl_data_v0.1.0.tar.gz.sha256
+shasum -a 256 -c catif_rl_data_v0.1.0.tar.gz.sha256
+tar -xzf catif_rl_data_v0.1.0.tar.gz       # populates  data/
+```
 
 **Three separate training cohorts.** EnzymeIF and CatIF do **not** share
 their training data:

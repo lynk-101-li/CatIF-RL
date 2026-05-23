@@ -1,6 +1,7 @@
 # CatIF-RL
 
 [![bioRxiv](https://img.shields.io/badge/bioRxiv-10.64898%2F2026.05.11.724288-b00.svg)](https://doi.org/10.64898/2026.05.11.724288)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20357062.svg)](https://doi.org/10.5281/zenodo.20357062)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.10](https://img.shields.io/badge/python-3.10-blue.svg)](https://www.python.org/downloads/)
 [![smoke](https://github.com/lynk-101-li/CatIF-RL/actions/workflows/smoke.yml/badge.svg)](https://github.com/lynk-101-li/CatIF-RL/actions/workflows/smoke.yml)

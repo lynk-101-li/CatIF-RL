@@ -20,11 +20,23 @@ epoch budget E_k = 2 selected for downstream use in every RL round
 
 ## How to obtain them
 
-A Zenodo / HuggingFace archive will be linked here once the deposit is
-finalised. Each checkpoint embeds its full model configuration under
-``ckpt['config']``, so inference scripts auto-construct the matching
-``EGNN_NET`` / ``GraDe_IF`` instance -- there are no extra hyperparameter
-flags to remember:
+The five checkpoints are archived in the same Zenodo deposit as the
+processed dataset:
+
+- Concept DOI (always latest): <https://doi.org/10.5281/zenodo.20357062>
+- Version DOI (v0.1.0 snapshot): <https://doi.org/10.5281/zenodo.20357063>
+
+```bash
+# ~156 MB (decimal) of model weights for all five pipeline stages
+wget https://zenodo.org/records/20357063/files/catif_rl_checkpoints_v0.1.0.tar.gz
+wget https://zenodo.org/records/20357063/files/catif_rl_checkpoints_v0.1.0.tar.gz.sha256
+shasum -a 256 -c catif_rl_checkpoints_v0.1.0.tar.gz.sha256
+tar -xzf catif_rl_checkpoints_v0.1.0.tar.gz   # populates  checkpoints/
+```
+
+Each checkpoint embeds its full model configuration under ``ckpt['config']``,
+so inference scripts auto-construct the matching ``EGNN_NET`` / ``GraDe_IF``
+instance -- there are no extra hyperparameter flags to remember:
 
 ```python
 import torch

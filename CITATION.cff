@@ -32,6 +32,13 @@ authors:
     orcid: "https://orcid.org/0000-0002-9403-4337"
 license: MIT
 repository-code: "https://github.com/lynk-101-li/CatIF-RL"
+identifiers:
+  - description: "Concept DOI on Zenodo (always resolves to the latest released version)"
+    type: doi
+    value: 10.5281/zenodo.20357062
+  - description: "Version DOI on Zenodo for the v0.1.0 release"
+    type: doi
+    value: 10.5281/zenodo.20357063
 preferred-citation:
   type: article
   title: "CatIF-RL: Activity-Oriented Enzyme Sequence Design by Steered Inverse Protein Folding"
