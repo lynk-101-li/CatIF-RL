@@ -6,38 +6,40 @@ ship in git. They are archived separately and downloaded into this folder.
 
 ## Expected layout
 
-Raw ESMFold-predicted PDB structures only. Processed `.pt` graph tensors are
-not shipped; regenerate them locally with `bash scripts/01_build_dataset.sh`.
+Both raw PDB structures and pre-processed PyTorch-Geometric `.pt` graph
+tensors are shipped. The two layers are functionally equivalent for the
+enzyme / GDC-mutant data, but the **`process/` layer is the only complete
+copy of the EnzymeIF training set** — CATH v4.2.0 backbones were
+processed into graphs directly and the raw CATH PDBs were not retained
+locally. Use `process/` for direct training; use `raw/` to inspect
+structures or rebuild graphs with `bash scripts/01_build_dataset.sh`.
 
 ```
 data/
-├── enzymeif/
-│   └── train_and_validation/      # 6,290 PDBs (sequence_<N>.pdb)
-│                                  # Native enzyme structures for EnzymeIF training.
-│                                  # Train+valid are NOT pre-split here; the
-│                                  # 5,661 / 629 split happens during graph
-│                                  # construction with random.Random(1234)
-│                                  # (manuscript §2.1, SI Table S4(b)).
+├── process/                       # Pre-merged graph tensors (.pt). Ready for direct training.
+│   ├── train/                     # 23,682 *.pt  (5,661 enzymes + 18,021 CATH regularizers)
+│   ├── valid/                     # 1,237 *.pt   (629 enzymes + 608 CATH)
+│   └── test/                      # 1,423 *.pt   (held-out DLKcat benchmark, enzyme only)
 │
-├── catif/
-│   ├── train/                     # 5,430 PDBs (sequence_<N>_group<M>.pdb)
-│   └── valid/                     # 604 PDBs (sequence_<N>_group<M>.pdb)
-│                                  # 5,430 + 604 = 6,034 GDC-curated mutants
-│                                  # (manuscript §2.3, SI Table S4). The
-│                                  # _group<M> suffix indicates which sample
-│                                  # group the variant came from during GDC.
-│                                  # Pre-split into train / valid by the GDC pipeline.
-│
-├── test/                          # 1,423 PDBs (sequence_<N>.pdb)
-│                                  # Shared held-out benchmark (manuscript §2.7);
-│                                  # identical across EnzymeIF / CatIF / CatIF-RL
-│                                  # evaluation.
+├── raw/                           # Source PDB structures (transparency / rebuild path).
+│   │                              # CATH PDBs are NOT included — download from cathdb.info
+│   │                              # if you want to rebuild the .pt graphs from scratch.
+│   ├── enzymeif/
+│   │   └── train_and_validation/  # 6,290 sequence_<N>.pdb (native enzyme; train+valid not
+│   │                              # pre-split here — the 5,661 / 629 split happens during
+│   │                              # graph construction with random.Random(1234), see
+│   │                              # manuscript §2.1 / SI Table S4(b))
+│   ├── catif/
+│   │   ├── train/                 # 5,430 sequence_<N>_group<M>.pdb (GDC-curated mutants)
+│   │   └── valid/                 # 604 sequence_<N>_group<M>.pdb
+│   │                              # 5,430 + 604 = 6,034 activity-positive GDC variants
+│   │                              # (manuscript §2.3); _group<M> identifies the GDC sample
+│   │                              # group. Pre-split into train / valid by the GDC pipeline.
+│   └── test/                      # 1,423 sequence_<N>.pdb (shared held-out benchmark)
 │
 ├── gdc/
-│   └── gdc_variants_6034.csv      # The 6,034 GDC-curated variants (manuscript §2.3),
-│                                  # one row per (ProID, group), columns:
-│                                  #   Group, ProID, ProSeq', mean3
-│                                  # Each row corresponds to one PDB under data/catif/.
+│   └── gdc_variants_6034.csv      # 6,034 rows; columns: Group, ProID, ProSeq', mean3.
+│                                  # Each row corresponds to one PDB under data/raw/catif/.
 │
 └── reward/                        # Offline RL inner-loop reward signals (manuscript §2.5)
     ├── round1_reward_data.csv     # CatIF       -> CatIF-RL Round-1
@@ -45,14 +47,14 @@ data/
     └── round3_reward_data.csv     # CatIF-RL R2 -> CatIF-RL Round-3 (final)
 ```
 
-**Three completely separate training cohorts.** EnzymeIF and CatIF do not
-share their training data:
+**Three separate training cohorts.** EnzymeIF and CatIF do **not** share
+their training data:
 
-- EnzymeIF trains against native enzyme structures with their native sequences (`data/enzymeif/`).
-- CatIF trains against ESMFold-refolded structures of the 6,034 GDC-selected mutant sequences (`data/catif/`).
-- CatIF-RL initialises from CatIF and uses the same `data/catif/` set as conditioning during GRPO outer-loop sampling.
+- EnzymeIF trains against the 5,661 native-enzyme + 18,021 CATH-regularizer graphs in `data/process/train/`.
+- CatIF trains against ESMFold-refolded structures of the 6,034 GDC-curated mutants (`data/raw/catif/`); its `.pt` graphs are derived from those PDBs at load time.
+- CatIF-RL initialises from CatIF and uses the same `data/raw/catif/` (or its derived graphs) as conditioning during GRPO outer-loop sampling.
 
-Only the held-out test set (`data/test/`) is shared across all three stages.
+Only the held-out test set (`data/process/test/` ⇄ `data/raw/test/`) is shared across all three stages.
 
 ## How to obtain it
 
