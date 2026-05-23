@@ -46,7 +46,7 @@ else
 fi
 
 # ---------- (2) Split / merge enzyme + CATH for the EnzymeIF cohort ----------
-# Canonical pipeline (see catif_rl/data/_split_scripts/数据划分说明.txt):
+# Canonical pipeline (see catif_rl/data/_split_scripts/README_split_workflow.txt):
 #   split_baseon_sequences.py -> run_split.py -> dataset_split_final.py
 # with align_pdb_names.py as a helper. These scripts produce the 5,661 / 629
 # enzyme split (random.Random(1234), 9:1) and merge with the 18,021 / 608

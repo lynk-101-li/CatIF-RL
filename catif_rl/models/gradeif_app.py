@@ -63,7 +63,7 @@ def set_seed(seed: int):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    # 可选的更强确定性（开销略大）： 
+    # Optional stronger determinism (slightly more expensive):
     # torch.backends.cudnn.deterministic = True
     # torch.backends.cudnn.benchmark = False
 
@@ -509,7 +509,7 @@ class Trianer(object):
         ema_update_every = 10,
         ema_decay = 0.995,
         adam_betas = (0.9, 0.99),
-        save_and_sample_every = 5, ##别save的太频繁了，这样checkpoint文件会很多，从2改为5.
+        save_and_sample_every = 5, ## avoid saving too often so the checkpoint count stays manageable (changed from 2 to 5)
         num_samples = 25,
         results_folder = './diffusion/results',
     ):    

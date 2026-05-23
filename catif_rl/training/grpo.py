@@ -5,27 +5,32 @@
 # Device   : NVIDIA RTX 5060 Ti (16 GB)
 
 # =============================================================================
-# grpo_trainer6.py —— vs grpo_trainer4.py 的主要改动
+# grpo_trainer6.py -- main changes vs. grpo_trainer4.py
 # -----------------------------------------------------------------------------
-# 1) 离线 GRPO 训练：不再在训练时调用奖励/预测器，而是从预先打分的 CSV
-#   （已计算 Δ / reward）中进行策略微调。
-# 2) 突变序列注入与统计：从 CSV 中直接注入突变序列构造 onehot，
-#    并计算 mutation_fraction / recovery，用于惩罚项与训练诊断。
-# 3) Token 平均的策略梯度：PG 项使用 mean_logp（按 token 平均），
-#    而非按序列长度求和的 logp，避免长序列主导训练。
-# 4) 稳定的 KL 代理项：KL 使用 (mean_logp − ref_mean_logp) 的裁剪 MSE 代理，
-#    并配合自适应 beta（含上限）防止策略漂移失控。
-# 5) 强化“是否真的在学”的诊断指标：新增组内
-#    icorr(reward, mean_logp) 与 top–bottom gap，
-#    同时在日志/汇总/图中记录 loss、pg_term、mean_logp、ref_mean_logp。
-# 6) 可视化重设计：epochXX_steps.png 全部使用散点图
-#    （group 顺序随机，避免折线制造假趋势），
-#    重点展示 loss / pg_term / ΔlogP / icorr / gap。
-# 7) 数据可学习性与去重过滤：组内按 ProSeq' 去重，
-#    且仅保留 reward 不同取值数 ≥ 3 的 group 参与训练，
-#    确保存在有效的组内排序学习信号。
-# 8) 权重与配置兼容性增强：统一从 checkpoint 或 meta.config
-#    中解析模型配置，兼容原始 CatIF 权重与 RL 训练保存的 policy_epochXX.pt。
+# 1) Offline GRPO training: rewards / predictors are no longer called during
+#    training; the policy is fine-tuned from a pre-scored CSV that already
+#    contains delta / reward.
+# 2) Mutant-sequence injection and tracking: mutant sequences from the CSV
+#    are turned directly into onehot inputs, and mutation_fraction / recovery
+#    are computed for the penalty term and training diagnostics.
+# 3) Token-averaged policy gradient: the PG term uses mean_logp (averaged per
+#    token) instead of the length-summed logp, preventing long sequences from
+#    dominating the gradient.
+# 4) Stable KL surrogate: KL is a clipped MSE surrogate on
+#    (mean_logp - ref_mean_logp), combined with an adaptive beta (with an
+#    upper bound) to keep the policy drift in check.
+# 5) Diagnostics for "are we actually learning?": added per-group
+#    icorr(reward, mean_logp) and top-bottom gap, plus loss / pg_term /
+#    mean_logp / ref_mean_logp in the logs, summaries, and plots.
+# 6) Plot redesign: epochXX_steps.png uses scatter plots only (groups appear
+#    in random order, which avoids spurious trend lines), and now focuses on
+#    loss / pg_term / dlogP / icorr / gap.
+# 7) Learnability filter and dedup: within each group we dedup by ProSeq',
+#    and we only keep groups with >= 3 distinct reward values, so that there
+#    is a real within-group ranking signal to learn from.
+# 8) Stronger weight / config compatibility: model config is resolved
+#    uniformly from either the checkpoint root or meta.config, supporting
+#    both the original CatIF weights and the RL-saved policy_epochXX.pt.
 # =============================================================================
 
 from __future__ import annotations
@@ -55,7 +60,7 @@ from catif_rl.data.large_dataset import Cath
 
 
 # -------------------------
-# 常量
+# Constants
 # -------------------------
 
 AMINO_CODES = ['A','R','N','D','C','Q','E','G','H','I',
@@ -82,7 +87,7 @@ class OfflineSample:
 
 
 # -------------------------
-# 工具函数
+# Utilities
 # -------------------------
 
 def set_seed(seed: int) -> None:
@@ -127,16 +132,16 @@ def build_model_from_config(config: Dict[str, object], sample: Data) -> Tuple[EG
 
 def extract_config(ckpt: Dict[str, object]) -> Dict[str, object]:
     """
-    兼容两种 checkpoint:
-    1) 原始 catif: { 'model': ..., 'config': {...}, 'ema': ... }
-    2) RL 后:      { 'model': ..., 'meta': { 'config': {...}, ... } }
+    Support two checkpoint formats:
+    1) Original catif: { 'model': ..., 'config': {...}, 'ema': ... }
+    2) Post-RL:        { 'model': ..., 'meta': { 'config': {...}, ... } }
     """
-    # 情况 1：顶层就有 config（原始 catif 权重）
+    # Case 1: top-level config (original catif weights)
     cfg = ckpt.get('config')
     if isinstance(cfg, dict):
         return cfg
 
-    # 情况 2：RL trainer 存的 policy_epochXX.pt
+    # Case 2: RL trainer's policy_epochXX.pt
     meta = ckpt.get('meta')
     if isinstance(meta, dict):
         cfg2 = meta.get('config')
@@ -144,8 +149,8 @@ def extract_config(ckpt: Dict[str, object]) -> Dict[str, object]:
             return cfg2
 
     raise RuntimeError(
-        "Checkpoint 中没有找到 config，"
-        "请确认是原始 catif 权重或 RL 训练保存的 policy_epochXX.pt。"
+        "Could not find config in checkpoint; "
+        "expected either an original catif weight or an RL-saved policy_epochXX.pt."
     )
 
 
@@ -189,13 +194,13 @@ def batch_mutant_onehot_from_seqs(batch: Batch, seqs: List[str]) -> Tensor:
     return x_mut
 
 
-# >>> NEW: 让 compute_log_prob 同时返回 "序列 logP 和 平均 token logP"，后面用来算 perplexity
+# >>> NEW: compute_log_prob now also returns "sequence logP and mean token logP"; used later for perplexity
 def compute_log_prob(diffusion: GraDe_IF, sample: SampleBatch, step: int,
                      requires_grad: bool) -> Tuple[Tensor, Tensor]:
     """
-    返回:
-      seq_logp:  每条序列的 log p(seq) = Σ_token log p(a_t)
-      mean_logp: 每条序列的 token 平均 log p = seq_logp / L
+    Returns:
+      seq_logp:  per-sequence log p(seq) = sum_token log p(a_t)
+      mean_logp: per-sequence mean token log p = seq_logp / L
     """
     data = sample.batch.clone()
     data.x = sample.onehot
@@ -209,7 +214,7 @@ def compute_log_prob(diffusion: GraDe_IF, sample: SampleBatch, step: int,
         idx = sample.onehot[:, :20].argmax(dim=-1, keepdim=True)
         token_logp = log_probs.gather(1, idx).squeeze(1)  # [num_nodes]
 
-        # 按 graph 聚合
+        # Aggregate per graph
         seq_logp = torch.zeros(num_graphs, device=data.x.device)
         lengths = torch.zeros(num_graphs, device=data.x.device)
         seq_logp.scatter_add_(0, data.batch, token_logp)
@@ -330,7 +335,7 @@ def save_policy(diffusion: GraDe_IF, path: Path, meta: Dict[str, object]) -> Non
 
 
 # -------------------------
-# CSV 读取 & 组装
+# CSV loading & grouping
 # -------------------------
 
 def load_offline_samples(csv_path: Path,
@@ -386,7 +391,7 @@ def group_samples_by_key(samples: List[OfflineSample]) -> Dict[str, List[Offline
 
 
 # -------------------------
-# 可视化工具
+# Plotting utilities
 # -------------------------
 
 def _save_epoch_step_plots(out_dir: Path,
@@ -401,8 +406,8 @@ def _save_epoch_step_plots(out_dir: Path,
         'loss', 'pg_term', 'dlogp', 'icorr', 'gap'
     ]
     titles = [
-        'Reward(mean)', 'Hit(>0)', 'KL(proxy)', 'Beta', 'Mean Δ', 'Mutation frac',
-        'Loss', 'PG term', 'ΔlogP (mean_logp - ref_mean_logp)',
+        'Reward(mean)', 'Hit(>0)', 'KL(proxy)', 'Beta', 'Mean delta', 'Mutation frac',
+        'Loss', 'PG term', 'dlogP (mean_logp - ref_mean_logp)',
         'icorr(reward, mean_logp)', 'Top-Bottom gap'
     ]
 
@@ -431,13 +436,13 @@ def _save_epoch_agg_plots(out_dir: Path,
         ('hit', 'Hit(Epoch)'),
         ('kl', 'KL(proxy/Epoch)'),
         ('beta', 'Beta(Epoch end)'),
-        ('delta', 'Mean Δ(Epoch)'),
+        ('delta', 'Mean delta(Epoch)'),
         ('mut', 'Mutation frac(Epoch)'),
         ('rec', 'Recovery(Epoch)'),
         ('loss', 'Loss(Epoch)'),
         # Special panels below: logP pair + dlogp
         ('logp_pair', 'Mean/Ref mean token logP(Epoch)'),
-        ('dlogp', 'ΔlogP (mean_logp - ref_mean_logp) (Epoch)'),
+        ('dlogp', 'dlogP (mean_logp - ref_mean_logp) (Epoch)'),
         ('icorr', 'mean_logp_icorr(Epoch)'),
         ('gap', 'Top-Bottom gap(Epoch)'),
     ]
@@ -485,7 +490,7 @@ def _save_epoch_agg_plots(out_dir: Path,
 
 
 # -------------------------
-# 训练主逻辑
+# Training entry point
 # -------------------------
 
 def parse_args() -> argparse.Namespace:
@@ -521,17 +526,17 @@ def parse_args() -> argparse.Namespace:
     p.add_argument('--seed', type=int, default=42)
     p.add_argument('--save-every', type=int, default=1)
 
-    # 数值稳定性新参数
+    # Numerical stability knobs
     p.add_argument('--kl-clip', type=float, default=5.0,
                    help='clip |logp - ref_logp| before squaring for KL proxy')
     p.add_argument('--max-beta', type=float, default=0.5,
                    help='maximum value for adaptive KL coefficient beta')
 
-    # 可视化
+    # Plotting
     p.add_argument('--no-plots', action='store_true', help='disable plotting')
     p.add_argument('--plot-every', type=int, default=1, help='plot every N epochs')
 
-    # group filtering（>=3的保留作为训练）
+    # Group filtering (>=3 distinct reward values are kept for training)
     p.add_argument('--min-reward-distinct', type=int, default=3,
                    help='only train on groups with distinct reward count >= this (after seq dedup)')
     return p.parse_args()
@@ -559,7 +564,7 @@ def train_offline() -> None:
     }
     summary_file.write(json.dumps(summary_header, ensure_ascii=False) + '\n')
 
-    # ---------- 条件图 ----------
+    # ---------- Condition graphs ----------
     cond_paths = sorted(f for f in Path(args.condition_dir).glob('*.pt'))
     if not cond_paths:
         raise RuntimeError('no conditioning graphs found in condition_dir')
@@ -568,12 +573,12 @@ def train_offline() -> None:
     dataset = Cath(cond_names, args.condition_dir)
     sample_data = dataset[0]
 
-    # ---------- 策略 ----------
+    # ---------- Policy ----------
     policy_ckpt = torch.load(args.policy_ckpt, map_location='cpu')
-    # 统一从 ckpt 中抽 config，兼容 catif & policy_epochXX.pt
+    # Resolve config from ckpt uniformly (supports catif & policy_epochXX.pt)
     config = extract_config(policy_ckpt)
 
-    # 用策略 ckpt 的 config 搭模型（ref 也用同样结构）
+    # Build the model using the policy ckpt's config (the ref uses the same shape)
     _, policy_diffusion = build_model_from_config(config, sample_data)
     policy_diffusion.load_state_dict(policy_ckpt['model'], strict=False)
     policy_diffusion.to(device)
@@ -595,7 +600,7 @@ def train_offline() -> None:
     )
     scaler = GradScaler(enabled=(not args.no_amp) and device.type == 'cuda')
 
-    # ---------- 数据 ----------
+    # ---------- Data ----------
     scored_csv = Path(args.scored_csv)
     samples = load_offline_samples(scored_csv, cond_name_to_idx)
     if not samples:
@@ -612,14 +617,14 @@ def train_offline() -> None:
           f'(min_reward_distinct={args.min_reward_distinct}, seq_dedup=on)')
 
     beta = args.beta
-    beta_min = 5e-4  # 下限
+    beta_min = 5e-4  # lower bound
     global_step = 0
 
     hist_epochs = {'reward': [], 'hit': [], 'kl': [], 'beta': [], 'delta': [], 'mut': [], 'rec': [],
                    'loss': [], 'mean_logp': [], 'ref_mean_logp': [], 'dlogp': [],
                    'icorr': [], 'gap': []}
 
-    # >>> NEW: 全局统计 recovery
+    # >>> NEW: global recovery stats
     global_rec_sum = 0.0
     global_n_samples = 0
     # <<< NEW
@@ -642,7 +647,7 @@ def train_offline() -> None:
         icorr_values: List[float] = []
         gap_values: List[float] = []
 
-        # >>> NEW: 每个 epoch 的 recovery
+        # >>> NEW: per-epoch recovery
         rec_epoch_sum = 0.0
         epoch_n_samples = 0
         # <<< NEW
@@ -687,15 +692,15 @@ def train_offline() -> None:
                                           dtype=torch.long, device=device)
             advantages = compute_group_advantages(reward, group_ids_tensor)
 
-            # 这里开始做数值保护：提前检查 reward/adv 是否非 NaN
+            # Numerical guard: bail out early if reward / adv has NaN
             if torch.isnan(reward).any() or torch.isnan(advantages).any():
                 pbar.write(f"[warn] skip group {g_key} due to NaN reward/adv.")
                 continue
 
-            loss_value = None  # will fill after forwar
+            loss_value = None  # will fill after forward
 
             with autocast(enabled=scaler.is_enabled()):
-                # >>> NEW: 同时拿到 seq_logp 和 mean_logp
+                # >>> NEW: get both seq_logp and mean_logp
                 logp, mean_logp = compute_log_prob(
                     policy_diffusion, sample_batch, step=args.sample_step, requires_grad=True
                 )
@@ -705,14 +710,14 @@ def train_offline() -> None:
                     )
                 # <<< NEW
 
-                # 检查 logp/ref_logp 是否正常
+                # Sanity check on logp / ref_logp
                 if torch.isnan(logp).any() or torch.isnan(ref_logp).any() \
                    or torch.isinf(logp).any() or torch.isinf(ref_logp).any():
                     pbar.write(f"[warn] skip group {g_key} due to NaN/Inf in logp.")
                     continue
 
-                # KL 代理：先裁剪 |logp-ref_logp|，再平方求均值
-                kl_sample = (mean_logp - ref_mean_logp) # 每个 token 平均 logp 之差
+                # KL surrogate: clip |logp - ref_logp| first, then mean-of-squares
+                kl_sample = (mean_logp - ref_mean_logp)  # per-sequence mean token logp difference
                 kl_sample = torch.clamp(kl_sample, -args.kl_clip, args.kl_clip)
                 kl = (kl_sample ** 2).mean()
 
@@ -759,7 +764,7 @@ def train_offline() -> None:
                 loss_value = float((pg_term + beta * kl).detach().float().item())
 
             epoch_rewards.append(reward_mean)
-            pos_hits.append(hit_rate)   
+            pos_hits.append(hit_rate)
             kl_values.append(kl_value)
             delta_values.append(delta_mean)
             mut_values.append(mut_mean)
@@ -771,12 +776,12 @@ def train_offline() -> None:
             if math.isfinite(gap):
                 gap_values.append(gap)
 
-            # >>> NEW: 基于 mut_frac 计算 recovery
+            # >>> NEW: recovery from mut_frac
             # recovery = 1 - mutation_fraction
             rec_vec = (1.0 - mut_frac_tensor).detach()               # [B]
             rec_mean = rec_vec.mean().item()
 
-            # 累积到 epoch + global
+            # Accumulate per-epoch + global
             batch_size = len(recs)
             rec_epoch_sum += float(rec_vec.sum().item())
             epoch_n_samples += batch_size
@@ -785,7 +790,7 @@ def train_offline() -> None:
             global_n_samples += batch_size
             # <<< NEW
 
-            # β 自适应，带上下限
+            # beta adapts within bounds
             if kl_value > args.kl_target * 1.5:
                 beta *= 1.5
             elif kl_value < args.kl_target * 0.5:
@@ -797,7 +802,7 @@ def train_offline() -> None:
                 'hit': f"{hit_rate:.3f}",
                 'kl': f"{kl_value:.4f}",
                 'beta': f"{beta:.3e}",
-                # >>> NEW: tqdm 实时显示 recovery
+                # >>> NEW: live recovery in tqdm
                 'rec': f"{rec_mean:.3f}",
                 # <<< NEW
                 # policy movement signals
@@ -846,7 +851,7 @@ def train_offline() -> None:
                 'beta': beta,
                 'delta_mean': delta_mean,
                 'mutation_frac_mean': mut_mean,
-                # >>> NEW: 把当前 batch 的 rec 也记录到 log 里（可选）
+                # >>> NEW: record per-batch rec in the log too (optional)
                 'recovery_mean': rec_mean,
                 # <<< NEW
                 # >>> NEW: signals that reflect policy movement under offline fixed rewards
@@ -878,7 +883,7 @@ def train_offline() -> None:
         # for icorr/gap we averaged only finite ones
         icorr_epoch = avg(icorr_values) if len(icorr_values) > 0 else float('nan')
         gap_epoch = avg(gap_values) if len(gap_values) > 0 else float('nan')
-        # >>> NEW: epoch 平均 recovery
+        # >>> NEW: per-epoch mean recovery
         rec_epoch = rec_epoch_sum / max(epoch_n_samples, 1)
         # <<< NEW
 
@@ -892,7 +897,7 @@ def train_offline() -> None:
             f'beta={beta:.4f} | mode={reward_mode}'
         )
 
-        # 记录到 training_summary.jsonl
+        # Append to training_summary.jsonl
         summary_epoch = {
             'event': 'epoch_end',
             'epoch': epoch + 1,
@@ -948,7 +953,7 @@ def train_offline() -> None:
     log_file.close()
     summary_file.close()
 
-    # >>> NEW: 训练全部结束后的全局平均 recovery
+    # >>> NEW: global mean recovery after all training is done
     if global_n_samples > 0:
         global_rec = global_rec_sum / global_n_samples
         print(

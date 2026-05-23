@@ -25,15 +25,15 @@ class Cath(Dataset):
         # Select sample
         ID = self.list_IDs[index]
         path = os.path.join(self.baseDIR, ID)
-        tqdm.write(f"Loading file: {path}")   # 打印正在加载的文件
+        tqdm.write(f"Loading file: {path}")   # log the file being loaded
 
         try:
             data = torch.load(path)
         except Exception as e:
-            tqdm.write(f"❌ Failed to load {path}: {e}")  # 出错时打印并抛出
+            tqdm.write(f"[ERROR] Failed to load {path}: {e}")  # log and re-raise on failure
             raise
 
-        # 原有的数据处理逻辑：
+        # Standard data preparation pipeline:
         del data['distances']
         del data['edge_dist']
         mu_r_norm = data.mu_r_norm

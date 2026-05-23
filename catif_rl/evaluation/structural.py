@@ -2,24 +2,33 @@
 # -*- coding: utf-8 -*-
 
 """
-## 可选计算：CA-RMSD / Backbone-RMSD / 平均 pLDDT / Recovery rate
-## 并把 ProID、参考序列、预测序列 一并写入 CSV
-## 最后一行求平均
+Compute structural / sequence metrics for a directory of predicted PDB
+files against a reference PDB directory.
 
-# 输出列固定：
-["ProID","ProSeq","ProSeq'","Recovery_rate","CA_RMSD","Backbone_RMSD","Avg_pLDDT"]
+Supported metrics (selectable via --metrics):
+    - CA-RMSD
+    - Backbone-RMSD
+    - Mean pLDDT (from B-factor)
+    - Recovery rate (residue-level sequence identity vs. reference)
 
-# 默认 metrics = rmsd,plddt
-python eval_metrics.py \
-  --ref-dir  dataset/raw/test \
-  --pred-dir sampling/mut_seq2pdb/pdb_Catif_RL_Nov26_test_mut_1 \
+The script writes one CSV row per prediction with the columns
+    ["ProID", "ProSeq", "ProSeq'", "Recovery_rate", "CA_RMSD",
+     "Backbone_RMSD", "Avg_pLDDT"]
+and appends a final "Mean" row averaging the requested metric columns.
+
+Examples
+--------
+# Default (RMSD + pLDDT):
+python -m catif_rl.evaluation.structural \\
+  --ref-dir  dataset/raw/test \\
+  --pred-dir sampling/mut_seq2pdb/pdb_Catif_RL_Nov26_test_mut_1 \\
   --csv-out  evaluation/pred_output_rmsd_plddt_table/metrics_default.csv
 
-# rmsd, plddt,rr都计算
-python evaluation/rmsd_plddt_eval_new.py \
-  --ref-dir  dataset/raw/test \
-  --pred-dir sampling/mut_seq2pdb/test_output_ProteinMPNN_pdb_1 \
-  --csv-out  evaluation/pred_output_rmsd_plddt_table/rmsd_plddt_proteinmpnn_test_mut_1.csv \
+# All three metrics:
+python -m catif_rl.evaluation.structural \\
+  --ref-dir  dataset/raw/test \\
+  --pred-dir sampling/mut_seq2pdb/test_output_ProteinMPNN_pdb_1 \\
+  --csv-out  evaluation/pred_output_rmsd_plddt_table/rmsd_plddt_proteinmpnn_test_mut_1.csv \\
   --metrics  rmsd,plddt,recovery
 """
 
@@ -79,7 +88,7 @@ def recovery_rate(ref_seq: str, pred_seq: str) -> float:
     if L == 0:
         return float("nan")
     if len(ref_seq) != len(pred_seq):
-        print(f"⚠️ 序列长度不一致：ref={len(ref_seq)} pred={len(pred_seq)}，按 min={L} 计算 recovery")
+        print(f"[WARN] sequence length mismatch: ref={len(ref_seq)} pred={len(pred_seq)}, computing recovery on min={L}")
     match = sum(1 for i in range(L) if ref_seq[i] == pred_seq[i])
     return match / L
 
@@ -99,14 +108,14 @@ def build_ref_path(ref_dir: str, pred_fname: str, ref_pattern: str) -> str:
 
 def parse_args():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--ref-dir",  default="dataset/raw/test", help="参考 PDB 目录")
-    ap.add_argument("--pred-dir", default="sampling/mut_seq2pdb/pdb_Catif_RL_Nov26_test_mut_1", help="预测 PDB 目录")
-    ap.add_argument("--csv-out",  default="evaluation/pred_output_rmsd_plddt_table/metrics.csv", help="输出 CSV 路径")
-    ap.add_argument("--ref-pattern", default="{fname}", help='参考文件名模板：默认同名，可用 "{stem}.pdb" 等')
+    ap.add_argument("--ref-dir",  default="dataset/raw/test", help="reference PDB directory")
+    ap.add_argument("--pred-dir", default="sampling/mut_seq2pdb/pdb_Catif_RL_Nov26_test_mut_1", help="predicted PDB directory")
+    ap.add_argument("--csv-out",  default="evaluation/pred_output_rmsd_plddt_table/metrics.csv", help="output CSV path")
+    ap.add_argument("--ref-pattern", default="{fname}", help='reference filename template; default is matching basename, others such as "{stem}.pdb" supported')
     ap.add_argument(
         "--metrics",
         default="rmsd,plddt",
-        help="要计算的指标，逗号分隔：rmsd,plddt,recovery（默认 rmsd,plddt）"
+        help="metrics to compute, comma-separated: rmsd,plddt,recovery (default: rmsd,plddt)"
     )
     return ap.parse_args()
 
@@ -120,9 +129,9 @@ def main():
     do_recovery = "recovery" in metrics
 
     if not os.path.isdir(pred_dir):
-        raise SystemExit(f"pred_dir 不存在或不是目录：{pred_dir}")
+        raise SystemExit(f"pred_dir does not exist or is not a directory: {pred_dir}")
     if not os.path.isdir(ref_dir):
-        print(f"⚠️ ref_dir 不存在或不是目录：{ref_dir}")
+        print(f"[WARN] ref_dir does not exist or is not a directory: {ref_dir}")
 
     rows = []
     for fname in sorted(os.listdir(pred_dir)):
@@ -133,7 +142,7 @@ def main():
         ref_p  = build_ref_path(ref_dir, fname, ref_pattern)
 
         if not os.path.exists(ref_p):
-            print(f"❗ 缺失参考结构: {os.path.basename(ref_p)}  (pred={fname})")
+            print(f"[MISS] reference structure missing: {os.path.basename(ref_p)}  (pred={fname})")
             continue
 
         try:
@@ -159,13 +168,13 @@ def main():
             rows.append([pro_id, ref_seq, pred_seq, rec, ca_r, bb_r, plddt])
 
         except Exception as e:
-            print(f"❌ {fname} 处理失败: {e}")
+            print(f"[ERROR] {fname} failed: {e}")
 
     if not rows:
-        print("⚠️ 无有效结果，未生成 CSV")
+        print("[WARN] no valid results; CSV not written")
         return
 
-    # 计算 Mean：仅对“实际计算”的列求均值；没算的列留空
+    # Compute Mean row: only over metrics that were actually requested.
     def mean_or_blank(vals, enabled: bool):
         if not enabled:
             return ""
@@ -193,7 +202,7 @@ def main():
         w.writerows(rows)
         w.writerow(mean_row)
 
-    print(f"\n✅ 已写入 {csv_out}  (共 {len(rows)} 条记录)")
+    print(f"\n[OK] wrote {csv_out}  ({len(rows)} records)")
 
 if __name__ == "__main__":
     main()

@@ -1,34 +1,35 @@
 #!/usr/bin/env python3
-"""
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-Replace the `ProSeq'` column with sequences loaded from FASTA files.
+"""
 Program: replace_proseq_from_fasta.py
+
 Description:
-    本脚本用于将输入 CSV 文件中的 `ProSeq'` 列替换为来自指定 FASTA 文件夹中的序列。
-    FASTA 文件命名格式为 `sequence_<ProID>.fasta` 或 `sequence_<ProID>.fa`，其中 <ProID> 必须与 CSV 表中 `ProID` 列的值一致。
-    当存在匹配的 FASTA 文件时，将使用其序列内容替换对应行的 `ProSeq'` 值；
-    若未找到匹配的 FASTA 文件，则该行保持原样，并在终端输出警告信息。
+    Replace the ``ProSeq'`` column in a CSV with sequences loaded from a
+    directory of FASTA files. FASTA files are expected to be named
+    ``sequence_<ProID>.fasta`` or ``sequence_<ProID>.fa``, where <ProID>
+    matches the ``ProID`` column of the input CSV. When a matching FASTA
+    is found, its sequence overwrites that row's ``ProSeq'``; rows whose
+    ``ProID`` cannot be matched are kept as-is and a warning is printed.
 
 Usage:
     python replace_proseq_from_fasta.py <csv_path> <fasta_dir> <output_path>
+
 Example:
     python replace_proseq_from_fasta.py test_mut_substrate_template.csv
 
 Arguments:
-    csv_path   : 输入 CSV 文件路径，需包含列 `ProID` 和 `ProSeq'`。
-                  例如：output_gradeif_test_dataset_seed_12345.csv
-    fasta_dir  : 存放 FASTA 文件的目录。每个 FASTA 文件名应为 sequence_<ProID>.fasta 或 sequence_<ProID>.fa。
-                  例如：sequence_1024.fasta, sequence_2048.fa
-    output_path: 替换完成后输出的新 CSV 文件路径。
-
-
+    csv_path   : Input CSV path; must contain columns ``ProID`` and ``ProSeq'``.
+                  e.g. output_gradeif_test_dataset_seed_12345.csv
+    fasta_dir  : Directory of FASTA files. Each file should be named
+                  sequence_<ProID>.fasta or sequence_<ProID>.fa.
+                  e.g. sequence_1024.fasta, sequence_2048.fa
+    output_path: Path of the new CSV to be written.
 
 Output:
-    - 输出的新 CSV 文件保留原有列，仅 `ProSeq'` 列被替换为对应的 FASTA 序列。
-    - 若某些 ProID 未在 fasta_dir 中找到对应的序列文件，将在终端输出警告：
+    - The output CSV keeps all original columns; only ``ProSeq'`` is
+      overwritten with the corresponding FASTA sequence when a match exists.
+    - If some ProIDs have no corresponding FASTA file, a warning is printed:
         Warning: no FASTA found for ProID(s): 101, 205, 309
-
 """
 
 from __future__ import annotations

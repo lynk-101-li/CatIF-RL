@@ -12,34 +12,36 @@ from torch_geometric.loader import DataLoader
 from catif_rl.data.large_dataset import Cath
 from catif_rl.models.gradeif_app import EGNN_NET, GraDe_IF
 
-# 防止外部脚本改 seed，这里保留原来的行
+# Neutralize torch.manual_seed so that the sampler stays diverse across runs
+# regardless of any seeding done by external scripts.
 torch.manual_seed = lambda *args, **kwargs: None
 
 
-# 1. 配置部分：指定 checkpoint 路径、测试集目录、批大小、集成次数、采样步数和设备
+# 1. Configuration: checkpoint path, test set directory, batch size,
+#    ensemble count, DDIM sampling step, and device.
 CKPT = 'diffusion/results/weight_rl/Nov26_epoch1/policy_epoch01.pt'
 TEST_DIR = 'dataset/process/test/'
 BATCH_SIZE = 300
-ENSEMBLE_NUM = 50    # 要重复采样几次并做 ensemble
-DDIM_STEP = 250      # DDIM 采样时的 step 参数
+ENSEMBLE_NUM = 50    # number of sampling repetitions to ensemble over
+DDIM_STEP = 250      # DDIM sampling step count
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-# --------- 统一加载 ckpt（兼容原始 catif + 强化学习 policy_epochXX） ---------
+# --------- Unified ckpt loading (compatible with original CatIF + RL policy_epochXX) ---------
 ckpt = torch.load(CKPT, map_location=DEVICE)
 
-# 1) 取 config：优先 ckpt['config']，否则看 meta 里有没有 config
+# 1) Resolve the model config: prefer ckpt['config'], otherwise look under meta.
 if 'config' in ckpt:
     config = ckpt['config']
 elif 'meta' in ckpt and isinstance(ckpt['meta'], dict) and 'config' in ckpt['meta']:
     config = ckpt['meta']['config']
 else:
     raise KeyError(
-        f"checkpoint {CKPT} 中没有找到 config，"
-        f"请确认是否包含 'config' 或 meta['config']"
+        f"checkpoint {CKPT} does not contain a config; "
+        f"expected either ckpt['config'] or ckpt['meta']['config']."
     )
 
-# 2) 重新构建底层的 EGNN_NET，参数要与训练时一致
+# 2) Rebuild the underlying EGNN_NET with the same hyperparameters used in training.
 input_feat_dim = config['input_feat_dim']
 edge_attr_dim  = config['edge_attr_dim']
 base_model = EGNN_NET(
@@ -55,7 +57,7 @@ base_model = EGNN_NET(
     embed_ss=config.get('embed_ss', -1),
 )
 
-# 将底层模型包装进 GraDe_IF 扩散框架
+# Wrap the base model in the GraDe_IF discrete-diffusion framework.
 diffusion = GraDe_IF(
     model=base_model,
     timesteps=config['timesteps'],
@@ -63,29 +65,29 @@ diffusion = GraDe_IF(
     config=config
 )
 
-# 3) 兼容两种权重格式：
-#    - 训练阶段原始 catif: ckpt['ema'] 存 EMA 状态 -> 用 EMA(diffusion) 还原 ema_model
-#    - 强化学习阶段 policy_epochXX.pt: 只存 ckpt['model'] -> 直接加载到 diffusion
+# 3) Support both checkpoint formats:
+#    - Original CatIF supervised: ckpt['ema'] holds the EMA state -> wrap and restore via EMA(diffusion)
+#    - RL policy_epochXX.pt: only ckpt['model'] is present -> load directly into diffusion
 if 'ema' in ckpt:
-    # 原始 catif / 带 EMA 的 checkpoint
+    # Original CatIF / EMA-tracked checkpoint
     ema = EMA(diffusion)
     ema.load_state_dict(ckpt['ema'])
     model = ema.ema_model.to(DEVICE).eval()
 else:
-    # RL trainer 输出：只有 'model'，没有 EMA
+    # RL trainer output: only 'model', no EMA
     if 'model' not in ckpt:
         raise KeyError(
-            f"checkpoint {CKPT} 既没有 'ema' 也没有 'model'，无法加载权重"
+            f"checkpoint {CKPT} contains neither 'ema' nor 'model'; cannot load weights."
         )
     diffusion.load_state_dict(ckpt['model'], strict=False)
     model = diffusion.to(DEVICE).eval()
 
-# 到这里，后面统一用 `model` 做 ddim_sample，不再区分 ema / 非 ema
+# From here on the rest of the script uses `model.ddim_sample` regardless of provenance.
 
 
-# 3. 构建测试集 DataLoader
-test_ids = sorted(os.listdir(TEST_DIR))       # 得到所有 .pt 文件名
-test_ds  = Cath(test_ids, TEST_DIR)           # 用 Cath 类加载图数据
+# 3. Build the test-set DataLoader.
+test_ids = sorted(os.listdir(TEST_DIR))       # all .pt filenames in the test directory
+test_ds  = Cath(test_ids, TEST_DIR)           # load graphs through the Cath dataset class
 test_loader = DataLoader(
     test_ds,
     batch_size=BATCH_SIZE,
@@ -94,17 +96,17 @@ test_loader = DataLoader(
     num_workers=6
 )
 
-# 4. 在测试集上评估：多次随机采样、计算单次和 ensemble 的指标
-records = []         # 存每次 run 的 {'run', 'recovery', 'perplexity'}
-ensemble_accum = []  # 存每次 run 全量的 all_prob，用于后续 ensemble
+# 4. Evaluate on the test set with multiple random samples; track per-run and ensemble metrics.
+records = []         # one record per run: {'run', 'recovery', 'perplexity'}
+ensemble_accum = []  # accumulated per-run probability tensors for the running ensemble
 
 for run in range(ENSEMBLE_NUM):
-    all_prob   = []  # 本次 run 下，每个 batch 的概率分布
-    all_seq    = []  # 本次 run 下，对应的真实标签
-    ind_accum  = []  # 本次 run 下，每个节点的正确/错误布尔向量
+    all_prob   = []  # this run's per-batch probability distributions
+    all_seq    = []  # this run's per-batch ground-truth labels
+    ind_accum  = []  # this run's per-node correctness indicators
 
     with torch.no_grad():
-        # 遍历所有 batch，做 DDIM 采样
+        # DDIM-sample every batch
         for data in test_loader:
             data = data.to(DEVICE)
             prob, sample = model.ddim_sample(
@@ -112,31 +114,31 @@ for run in range(ENSEMBLE_NUM):
                 diverse=True,
                 step=DDIM_STEP
             )
-            # 计算本 batch 的恢复率（预测正确比例）
+            # Per-batch recovery (fraction of correctly predicted residues)
             seq_true = data.x.argmax(dim=1)
             seq_pred = sample.argmax(dim=1)
             rr = (seq_true == seq_pred).float().mean().item()
             ind_accum.append((seq_true == seq_pred).cpu())
 
-            # 收集概率分布和真实标签
+            # Stash probabilities and labels for the global aggregate
             all_prob.append(prob.cpu())
             all_seq.append(seq_true.cpu())
 
-    # 拼接所有 batch 得到测试集全量结果
+    # Concatenate batches to obtain the per-run test-set totals
     all_prob = torch.cat(all_prob, dim=0)   # [N_total, 20]
     all_seq  = torch.cat(all_seq, dim=0)    # [N_total]
     ind_all  = torch.cat(ind_accum, dim=0)  # [N_total]
-    # 计算全量rr与 perplexity = exp(平均交叉熵)
+    # Per-run recovery rate and perplexity = exp(mean cross-entropy)
     rr = ind_all.float().mean().item()
     ppl = np.exp(F.cross_entropy(all_prob, all_seq, reduction='mean').item())
 
-    # 记录本次 run 的单次指标
+    # Record this run's single-sample metrics
     records.append({'run': run, 'recovery': rr, 'perplexity': ppl})
     ensemble_accum.append(all_prob)
 
-    # 从第二次 run 开始，每次都做 ensemble 平均并记录
+    # Starting from the second run, also record the running ensemble metric
     if run > 0:
-        ens_prob = torch.stack(ensemble_accum, dim=0).mean(dim=0)  # 平均概率
+        ens_prob = torch.stack(ensemble_accum, dim=0).mean(dim=0)  # mean per-node probability
         ens_pred = ens_prob.argmax(dim=1)
         ens_rr   = (ens_pred == all_seq).float().mean().item()
         ens_ppl  = np.exp(F.cross_entropy(ens_prob, all_seq, reduction='mean').item())
@@ -146,7 +148,7 @@ for run in range(ENSEMBLE_NUM):
             'perplexity': ens_ppl
         })
 
-# 5. 将记录写入 CSV，并打印
+# 5. Persist the records to CSV and echo to stdout.
 df = pd.DataFrame(records)
 df.to_csv('evaluation/Nov26_epoch1_evaluation_results.csv', index=False)
 print(df)
