@@ -6,37 +6,53 @@ ship in git. They are archived separately and downloaded into this folder.
 
 ## Expected layout
 
+Raw ESMFold-predicted PDB structures only. Processed `.pt` graph tensors are
+not shipped; regenerate them locally with `bash scripts/01_build_dataset.sh`.
+
 ```
 data/
-├── process/
-│   ├── train/             # 23,682 *.pt graph tensors (5,661 enzymes + 18,021 CATH regularizers)
-│   ├── valid/             # 1,237 *.pt (629 enzymes + 608 CATH)
-│   └── test/              # 1,423 *.pt (held-out DLKcat benchmark)
+├── enzymeif/
+│   └── train_and_validation/      # 6,290 PDBs (sequence_<N>.pdb)
+│                                  # Native enzyme structures for EnzymeIF training.
+│                                  # Train+valid are NOT pre-split here; the
+│                                  # 5,661 / 629 split happens during graph
+│                                  # construction with random.Random(1234)
+│                                  # (manuscript §2.1, SI Table S4(b)).
 │
-├── raw/                   # ESMFold-predicted *.pdb backbones
-│   ├── brenda_seq_pdb/    # 7,713 PDB files (one per distinct enzyme sequence)
-│   └── test/              # 1,423 PDB files (held-out subset, also in brenda_seq_pdb/)
+├── catif/
+│   ├── train/                     # 5,430 PDBs (sequence_<N>_group<M>.pdb)
+│   └── valid/                     # 604 PDBs (sequence_<N>_group<M>.pdb)
+│                                  # 5,430 + 604 = 6,034 GDC-curated mutants
+│                                  # (manuscript §2.3, SI Table S4). The
+│                                  # _group<M> suffix indicates which sample
+│                                  # group the variant came from during GDC.
+│                                  # Pre-split into train / valid by the GDC pipeline.
 │
-├── gdc/                   # GDC sequence selections (manuscript §2.3)
-│   └── gdc_variants_6034.csv     # 6,034 activity-positive variants; columns:
-│                                 #   Group, ProID, ProSeq' (GDC-selected sequence), mean3
-│                                 # CatIF training reads the EnzymeIF backbones from
-│                                 # data/process/train/ and overrides the native
-│                                 # sequence labels with ProSeq' for each ProID found
-│                                 # in this CSV.
+├── test/                          # 1,423 PDBs (sequence_<N>.pdb)
+│                                  # Shared held-out benchmark (manuscript §2.7);
+│                                  # identical across EnzymeIF / CatIF / CatIF-RL
+│                                  # evaluation.
 │
-└── reward/                # Offline RL inner-loop reward signals (manuscript §2.5)
-    ├── round1_reward_data.csv    # CatIF -> Round-1 policy update
-    ├── round2_reward_data.csv    # Round 1 -> Round-2 update
-    └── round3_reward_data.csv    # Round 2 -> Round-3 update (final CatIF-RL)
+├── gdc/
+│   └── gdc_variants_6034.csv      # The 6,034 GDC-curated variants (manuscript §2.3),
+│                                  # one row per (ProID, group), columns:
+│                                  #   Group, ProID, ProSeq', mean3
+│                                  # Each row corresponds to one PDB under data/catif/.
+│
+└── reward/                        # Offline RL inner-loop reward signals (manuscript §2.5)
+    ├── round1_reward_data.csv     # CatIF       -> CatIF-RL Round-1
+    ├── round2_reward_data.csv     # CatIF-RL R1 -> CatIF-RL Round-2
+    └── round3_reward_data.csv     # CatIF-RL R2 -> CatIF-RL Round-3 (final)
 ```
 
-The `process/` graph tensors are the canonical structural backbones used by
-**all three** training stages: EnzymeIF trains against the native sequence
-label baked into each `.pt`; CatIF trains against the GDC-selected label
-substituted in from `gdc/gdc_variants_6034.csv` at load time; CatIF-RL
-samples from `process/train/` and `process/valid/` as conditioning during
-GRPO outer-loop generation.
+**Three completely separate training cohorts.** EnzymeIF and CatIF do not
+share their training data:
+
+- EnzymeIF trains against native enzyme structures with their native sequences (`data/enzymeif/`).
+- CatIF trains against ESMFold-refolded structures of the 6,034 GDC-selected mutant sequences (`data/catif/`).
+- CatIF-RL initialises from CatIF and uses the same `data/catif/` set as conditioning during GRPO outer-loop sampling.
+
+Only the held-out test set (`data/test/`) is shared across all three stages.
 
 ## How to obtain it
 
