@@ -16,44 +16,58 @@ the `.pt` graphs in ~1-2 hours with:
 bash scripts/01_build_dataset.sh
 ```
 
-This also doubles as an end-to-end verification of the graph-construction
-pipeline.
+This also fetches the CATH v4.2.0 structural regularizers from RCSB
+automatically (no manual download needed) and runs the graph-construction
+pipeline end-to-end.
 
 ```
 data/
 ├── raw/
 │   ├── enzymeif/
-│   │   ├── train_and_validation/  # 6,290 sequence_<N>.pdb
+│   │   ├── train_and_validation/  # 6,290 sequence_<N>.pdb -- bundled in the Zenodo deposit.
 │   │   │                          # Native enzyme structures for EnzymeIF training.
-│   │   │                          # Train+valid are NOT pre-split here — the
+│   │   │                          # Train+valid are NOT pre-split here -- the
 │   │   │                          # 5,661 / 629 split happens during graph
 │   │   │                          # construction with random.Random(1234)
 │   │   │                          # (manuscript §2.1, SI Table S4(b)).
-│   │   └── cath_v4_2_0/           # 18,629 <pdbid>.<chain>.pdb
-│   │                              # CATH v4.2.0 structural regularizers
-│   │                              # (manuscript §2.2). 18,021 enter train,
-│   │                              # 608 enter valid. Sourced from cathdb.info
-│   │                              # and the RCSB PDB.
+│   │   └── cath_v4_2_0/           # 18,629 <pdbid>.<chain>.pdb -- NOT in the Zenodo
+│   │                              # deposit; downloaded automatically from RCSB by
+│   │                              # scripts/01_build_dataset.sh using the manifest at
+│   │                              # catif_rl/data/assets/chain_set_splits.json
+│   │                              # (manuscript §2.2; 18,021 enter EnzymeIF train,
+│   │                              # 608 enter valid).
 │   ├── catif/
-│   │   ├── train/                 # 5,430 sequence_<N>_group<M>.pdb
-│   │   └── valid/                 # 604 sequence_<N>_group<M>.pdb
+│   │   ├── train/                 # 5,430 sequence_<N>_group<M>.pdb -- in Zenodo deposit.
+│   │   └── valid/                 # 604 sequence_<N>_group<M>.pdb -- in Zenodo deposit.
 │   │                              # 5,430 + 604 = 6,034 activity-positive GDC
 │   │                              # variants (manuscript §2.3); _group<M>
 │   │                              # identifies the GDC sample group. Pre-split
 │   │                              # train / valid by the GDC pipeline.
-│   └── test/                      # 1,423 sequence_<N>.pdb
+│   └── test/                      # 1,423 sequence_<N>.pdb -- in Zenodo deposit.
 │                                  # Shared held-out DLKcat benchmark
 │                                  # (manuscript §2.7).
 │
-├── gdc/
+├── gdc/                           # in Zenodo deposit
 │   └── gdc_variants_6034.csv      # 6,034 rows; columns: Group, ProID, ProSeq', mean3.
 │                                  # Each row corresponds to one PDB under data/raw/catif/.
 │
-└── reward/                        # Offline RL inner-loop reward signals (manuscript §2.5)
+└── reward/                        # in Zenodo deposit; offline RL inner-loop reward
+                                   # signals (manuscript §2.5)
     ├── round1_reward_data.csv     # CatIF       -> CatIF-RL Round-1
     ├── round2_reward_data.csv     # CatIF-RL R1 -> CatIF-RL Round-2
     └── round3_reward_data.csv     # CatIF-RL R2 -> CatIF-RL Round-3 (final)
 ```
+
+### What is in the Zenodo deposit vs. what gets fetched on first run
+
+The Zenodo deposit at <https://doi.org/10.5281/zenodo.XXXXXXX> (link added
+once the deposit is finalised) contains only the **author-original** PDBs
+and CSVs: native enzyme structures, GDC-curated mutant structures, the
+held-out test set, the GDC variant table, and the per-round RL reward
+files. The CATH v4.2.0 PDBs are **not** redistributed; they are downloaded
+on first run from RCSB via `catif_rl/data/download_pdb.py`, using the
+chain manifest `catif_rl/data/assets/chain_set_splits.json` (originally
+from GraDe-IF; CATH itself is CC BY 4.0).
 
 **Three separate training cohorts.** EnzymeIF and CatIF do **not** share
 their training data:
