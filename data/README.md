@@ -12,16 +12,31 @@ data/
 │   ├── train/             # 23,682 *.pt graph tensors (5,661 enzymes + 18,021 CATH regularizers)
 │   ├── valid/             # 1,237 *.pt (629 enzymes + 608 CATH)
 │   └── test/              # 1,423 *.pt (held-out DLKcat benchmark)
-├── raw/                   # ESMFold-predicted *.pdb backbones (one per distinct sequence;
-│                          # only needed if you plan to regenerate the .pt graphs from
-│                          # scratch -- see catif_rl/data/graph_construction.py)
-├── brenda/                # DLKcat-BRENDA exports (records CSV + train/dev/test sets)
-├── enzyme_train_and_valid_dataset/   # Per-enzyme conditioning graphs used during GRPO
-└── reward/                            # Offline reward CSVs per round
-    ├── round1_reward_data.csv
-    ├── round2_reward_data.csv
-    └── round3_reward_data.csv
+│
+├── raw/                   # ESMFold-predicted *.pdb backbones
+│   ├── brenda_seq_pdb/    # 7,713 PDB files (one per distinct enzyme sequence)
+│   └── test/              # 1,423 PDB files (held-out subset, also in brenda_seq_pdb/)
+│
+├── gdc/                   # GDC sequence selections (manuscript §2.3)
+│   └── gdc_variants_6034.csv     # 6,034 activity-positive variants; columns:
+│                                 #   Group, ProID, ProSeq' (GDC-selected sequence), mean3
+│                                 # CatIF training reads the EnzymeIF backbones from
+│                                 # data/process/train/ and overrides the native
+│                                 # sequence labels with ProSeq' for each ProID found
+│                                 # in this CSV.
+│
+└── reward/                # Offline RL inner-loop reward signals (manuscript §2.5)
+    ├── round1_reward_data.csv    # CatIF -> Round-1 policy update
+    ├── round2_reward_data.csv    # Round 1 -> Round-2 update
+    └── round3_reward_data.csv    # Round 2 -> Round-3 update (final CatIF-RL)
 ```
+
+The `process/` graph tensors are the canonical structural backbones used by
+**all three** training stages: EnzymeIF trains against the native sequence
+label baked into each `.pt`; CatIF trains against the GDC-selected label
+substituted in from `gdc/gdc_variants_6034.csv` at load time; CatIF-RL
+samples from `process/train/` and `process/valid/` as conditioning during
+GRPO outer-loop generation.
 
 ## How to obtain it
 
