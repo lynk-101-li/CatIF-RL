@@ -19,7 +19,10 @@ torch.manual_seed = lambda *args, **kwargs: None
 
 # 1. Configuration: checkpoint path, test set directory, batch size,
 #    ensemble count, DDIM sampling step, and device.
-CKPT = 'diffusion/results/weight_rl/Nov26_epoch1/policy_epoch01.pt'
+#    The default checkpoint points at the final CatIF-RL Round-3 weights
+#    distributed via Zenodo (see checkpoints/README.md). Override CKPT to
+#    evaluate any other supervised or RL checkpoint.
+CKPT = 'checkpoints/catif_rl_R3_epoch02.pt'
 TEST_DIR = 'dataset/process/test/'
 BATCH_SIZE = 300
 ENSEMBLE_NUM = 50    # number of sampling repetitions to ensemble over
@@ -150,5 +153,5 @@ for run in range(ENSEMBLE_NUM):
 
 # 5. Persist the records to CSV and echo to stdout.
 df = pd.DataFrame(records)
-df.to_csv('evaluation/Nov26_epoch1_evaluation_results.csv', index=False)
+df.to_csv('evaluation/recovery_results.csv', index=False)
 print(df)

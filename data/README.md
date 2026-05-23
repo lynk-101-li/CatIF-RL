@@ -25,7 +25,8 @@ data/
 ├── raw/
 │   ├── enzymeif/
 │   │   ├── train_and_validation/  # 6,290 sequence_<N>.pdb -- bundled in the Zenodo deposit.
-│   │   │                          # Native enzyme structures for EnzymeIF training.
+│   │   │                          # ESMFold-predicted structures of native
+│   │   │                          # enzymes used for EnzymeIF training.
 │   │   │                          # Train+valid are NOT pre-split here -- the
 │   │   │                          # 5,661 / 629 split happens during graph
 │   │   │                          # construction with random.Random(1234)
