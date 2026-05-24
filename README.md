@@ -9,7 +9,7 @@
 <p align="center">
   <img src="docs/figures/toc.jpg" alt="CatIF-RL Table-of-Contents graphic" width="820">
 </p>
-<p align="center"><em>Table-of-Contents graphic prepared for the JCIM submission. CatIF-RL recasts a graph-based discrete-diffusion inverse-folding model as an activity-directed enzyme sequence generator, combining Generative Dataset Curation (GDC) with KL-regularized GRPO post-training to progressively steer the sampling distribution toward variants with higher predicted catalytic turnover (k<sub>cat</sub>) while preserving fold compatibility.</em></p>
+<p align="center"><em> CatIF-RL recasts a graph-based discrete-diffusion inverse-folding model as an activity-directed enzyme sequence generator, combining Generative Dataset Curation (GDC) with KL-regularized GRPO post-training to progressively steer the sampling distribution toward variants with higher predicted catalytic turnover (k<sub>cat</sub>) while preserving fold compatibility.</em></p>
 
 **Activity-Oriented Enzyme Sequence Design by Steered Inverse Protein Folding**
 
