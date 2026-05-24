@@ -1,31 +1,26 @@
 # CatIF-RL
 
-<p align="center">
-  <img src="docs/figures/toc.jpg" alt="CatIF-RL graphical abstract" width="820">
-</p>
-<p align="center"><em>Graphical abstract — sample → score → KL-regularized GRPO update over a discrete-diffusion inverse-folding policy. Full description: bioRxiv preprint <a href="https://doi.org/10.64898/2026.05.11.724288">10.64898/2026.05.11.724288</a>.</em></p>
-
 [![bioRxiv](https://img.shields.io/badge/bioRxiv-10.64898%2F2026.05.11.724288-b00.svg)](https://doi.org/10.64898/2026.05.11.724288)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20357062.svg)](https://doi.org/10.5281/zenodo.20357062)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.10](https://img.shields.io/badge/python-3.10-blue.svg)](https://www.python.org/downloads/)
 [![smoke](https://github.com/lynk-101-li/CatIF-RL/actions/workflows/smoke.yml/badge.svg)](https://github.com/lynk-101-li/CatIF-RL/actions/workflows/smoke.yml)
 
+<p align="center">
+  <img src="docs/figures/toc.jpg" alt="CatIF-RL Table-of-Contents graphic" width="820">
+</p>
+<p align="center"><em>Table-of-Contents graphic prepared for the JCIM submission. CatIF-RL recasts a graph-based discrete-diffusion inverse-folding model as an activity-directed enzyme sequence generator, combining Generative Dataset Curation (GDC) with KL-regularized GRPO post-training to progressively steer the sampling distribution toward variants with higher predicted catalytic turnover (k<sub>cat</sub>) while preserving fold compatibility.</em></p>
+
 **Activity-Oriented Enzyme Sequence Design by Steered Inverse Protein Folding**
 
-CatIF-RL is a reinforcement-learning framework that fine-tunes a graph-based discrete-diffusion inverse-folding policy toward enzymes with higher predicted catalytic activity. The pipeline iterates:
+CatIF-RL recasts a graph-based discrete-diffusion inverse-folding model as an *activity-directed* enzyme sequence generator. Taking predicted enzyme turnover number (*k*<sub>cat</sub>) as the primary design objective, the framework combines **Generative Dataset Curation (GDC)** with **KL-regularized reinforcement-learning post-training** to progressively reshape the sampling distribution toward regions of high catalytic activity while keeping sequences compatible with the input backbone. The pipeline runs in four sequential stages, all built on a shared graph-denoising-diffusion backbone:
 
-1. Sample candidate mutant sequences from the current policy on a fixed backbone graph.
-2. Score each candidate's Δlog(*k*<sub>cat</sub>) with an ensemble of independent kinetic predictors (DLKcat, UniKP, CataPro), gated by ESMFold structural plausibility.
-3. Apply KL-regularized Group Relative Policy Optimization (GRPO) against the offline reward, with a mutation-fraction penalty.
+1. **EnzymeIF** — supervised adaptation of the inverse-folding prior to a leakage-controlled BRENDA-derived enzyme structure dataset, with CATH-derived backbones as structural regularizers.
+2. **GDC (Generative Dataset Curation)** — EnzymeIF samples *K* = 10 candidate sequences per training backbone; survivors of an ESMFold structural gate (backbone RMSD < 4 Å, mean pLDDT > 90) are scored by an ensemble of three independent *k*<sub>cat</sub> predictors (DLKcat, UniKP, CataPro) via normalized mutant-vs-native Δlog(*k*<sub>cat</sub>). Activity-positive variants form a curated training set of 6,034 sequences.
+3. **CatIF** — a new inverse-folding model trained *from scratch* on the activity-positive GDC variant set (not a continuation of EnzymeIF).
+4. **CatIF-RL** — KL-regularized **Group Relative Policy Optimization (GRPO)** refinement of CatIF over three iterative rounds of sample → ensemble-score → policy update, with a mutation-fraction penalty constraining divergence from the input backbone.
 
-The framework comprises three sequential models trained from a shared graph-denoising-diffusion backbone:
-
-- **EnzymeIF** — supervised adaptation of the inverse-folding prior to enzyme structural data, with CATH-derived backbones as structural regularizers.
-- **CatIF** — supervised model trained from scratch on the activity-positive variant set selected by Generative Dataset Curation (GDC).
-- **CatIF-RL** — KL-regularized GRPO refinement of CatIF over three iterative rounds of sample → score → train.
-
-A discrete subgraph inpainting sampler (BLOSUM iterative-fusion variant) supports motif-preserving partial sequence redesign under fixed catalytic residues.
+On the held-out benchmark, CatIF-RL achieves an approximately **four-fold increase in predicted *k*<sub>cat</sub>** relative to the corresponding native enzymes, while maintaining sequence recovery (0.55) and predicted structural fidelity, and substantially outperforming representative inverse-folding baselines. A discrete subgraph inpainting sampler (BLOSUM iterative-fusion variant) additionally supports motif-preserving partial sequence redesign under fixed catalytic residues.
 
 ## Repository layout
 
