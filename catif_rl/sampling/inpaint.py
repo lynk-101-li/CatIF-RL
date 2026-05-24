@@ -205,37 +205,83 @@ def repaint_ddim_sample(diffusion_model, data, mask, gt_x, step=100, jump_n=10, 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description="GraDe_IF Inference with Repaint & Resampling")
 
-    # Basic args
-    p.add_argument('--test_dir',   type=str, required=True)
-    p.add_argument('--ckpt_path',  type=str, required=True)
+    # Input source: either a directory of .pt graphs (batch mode) or a single PDB.
+    src = p.add_mutually_exclusive_group(required=True)
+    src.add_argument('--test_dir', type=str, default=None,
+                     help="directory of .pt graphs (batch mode)")
+    src.add_argument('--pdb',      type=str, default=None,
+                     help="single PDB file to inpaint (single-PDB mode)")
+
+    # Checkpoint: --ckpt_path is the canonical long form; --ckpt is a short alias
+    # so the README and scripts/08_run_case_studies.sh examples work as-is.
+    p.add_argument('--ckpt_path', '--ckpt', dest='ckpt_path', type=str, required=True,
+                   help="path to .pt checkpoint")
+
     p.add_argument('--batch_size', type=int, default=32)
     p.add_argument('--device',     type=str, default='cuda:0')
-    p.add_argument('--output_dir', type=str, required=True)
-    p.add_argument('--seed',       type=int, default=-1)
+
+    # Output: either a directory (batch mode -> one FASTA per input graph) or a
+    # single file (single-PDB mode).
+    out_group = p.add_mutually_exclusive_group(required=True)
+    out_group.add_argument('--output_dir', type=str, default=None,
+                           help="directory to write FASTA files (batch mode)")
+    out_group.add_argument('--output',     type=str, default=None,
+                           help="single FASTA file to write (single-PDB mode)")
+
+    p.add_argument('--seed', type=int, default=-1)
 
     # Sampling args
     p.add_argument('--step',       type=int, default=50, help="DDIM step size")
     p.add_argument('--no_diverse', action='store_true', help="if set, disables diverse sampling (uses argmax)")
 
-    # Repaint args
+    # Repaint args. ``--mask`` and ``--u`` are short aliases for the long forms
+    # (--mask_indices, --repaint_jump_n). Passing --mask / --u implicitly turns
+    # on --use_repaint so the case-study CLI in scripts/08_run_case_studies.sh
+    # need not state it explicitly.
     p.add_argument('--use_repaint', action='store_true', help="enable Repaint mode")
-    p.add_argument('--mask_indices', type=str, default="", help="0-based indices to repaint, e.g. '10-20,35'")
-    p.add_argument('--repaint_jump_n', type=int, default=10, help="repaint resampling count (default 10); 1 disables the jump-back")
+    p.add_argument('--mask_indices', '--mask', dest='mask_indices', type=str, default="",
+                   help="0-based indices to repaint, e.g. '10-20,35'")
+    p.add_argument('--repaint_jump_n', '--u', dest='repaint_jump_n', type=int, default=10,
+                   help="repaint resampling count (default 10); 1 disables the jump-back")
 
     args = p.parse_args()
+
+    # If the user passed --mask or --u (i.e. anything that implies inpainting),
+    # auto-enable --use_repaint. This keeps the case-study CLI minimal.
+    if args.mask_indices and not args.use_repaint:
+        args.use_repaint = True
 
     # Handle arguments
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
     set_seed(args.seed)
-    os.makedirs(args.output_dir, exist_ok=True)
+
+    # Resolve output target. In single-file mode we still need a directory to
+    # exist for the parent of --output.
+    if args.output is not None:
+        os.makedirs(os.path.dirname(os.path.abspath(args.output)) or ".", exist_ok=True)
+    else:
+        os.makedirs(args.output_dir, exist_ok=True)
 
     # diverse defaults to True unless --no_diverse is given
     is_diverse = not args.no_diverse
 
-    # Load data
-    test_ids = sorted([f for f in os.listdir(args.test_dir) if f.endswith('.pt')])
-    test_ds  = Cath(test_ids, args.test_dir)
-    test_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=4)
+    # Load data: directory of .pt files, or a single PDB built on the fly.
+    if args.pdb is not None:
+        from catif_rl.data.graph_construction import pdb_to_sample_data
+        from torch_geometric.data import Batch
+        single_data = pdb_to_sample_data(args.pdb)
+        if single_data is None:
+            raise RuntimeError(
+                f"failed to build a graph from {args.pdb}; "
+                "check that the PDB has at least the minimum number of residues "
+                "and that mkdssp is on PATH."
+            )
+        test_ids = [os.path.splitext(os.path.basename(args.pdb))[0] + '.pt']
+        test_loader = [Batch.from_data_list([single_data])]  # iterable of length 1
+    else:
+        test_ids = sorted([f for f in os.listdir(args.test_dir) if f.endswith('.pt')])
+        test_ds  = Cath(test_ids, args.test_dir)
+        test_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=4)
 
     # Load checkpoint
     print(f"Loading checkpoint from {args.ckpt_path} ...")
@@ -332,7 +378,9 @@ if __name__ == "__main__":
                     step=args.step
                 )
 
-            # Save
+            # Save. In single-file mode (``--output``) we write the one and
+            # only sequence to that exact path; in batch mode we emit one
+            # FASTA per input graph under ``--output_dir``.
             node_counts = [g.x.size(0) for g in batch.to_data_list()]
             start = 0
             for count in node_counts:
@@ -341,8 +389,12 @@ if __name__ == "__main__":
                 oh = pred_onehot[start:start+count]
                 seq = onehot_to_seq(oh)
                 pt_name = test_ids[global_idx]
-                fasta_fn = os.path.splitext(pt_name)[0] + '.fasta'
-                out_path = os.path.join(args.output_dir, fasta_fn)
+
+                if args.output is not None:
+                    out_path = args.output
+                else:
+                    fasta_fn = os.path.splitext(pt_name)[0] + '.fasta'
+                    out_path = os.path.join(args.output_dir, fasta_fn)
 
                 with open(out_path, 'w') as f:
                     f.write(f'>{pt_name}\n{seq}\n')
@@ -350,4 +402,5 @@ if __name__ == "__main__":
                 start += count
                 global_idx += 1
 
-    print(f"[OK] All Done. Output saved to {args.output_dir}")
+    out_target = args.output if args.output is not None else args.output_dir
+    print(f"[OK] All Done. Output saved to {out_target}")

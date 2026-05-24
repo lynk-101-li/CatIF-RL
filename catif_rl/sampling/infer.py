@@ -1,10 +1,20 @@
 #!/usr/bin/env python
 """
-DDIM inference for CatIF / CatIF-RL policies. Reads ``.pt`` condition graphs
-from ``--test_dir``, samples one sequence per graph at the given ``--seed``,
-and writes one FASTA per input graph into ``--output_dir``.
+DDIM inference for CatIF / CatIF-RL policies.
 
-Single-seed run on the held-out benchmark::
+Two input modes are supported:
+
+1. **Batch mode** (``--test_dir <dir>``): read every ``.pt`` graph under the
+   directory, sample one sequence per graph, and write one FASTA per graph
+   into ``--output_dir``. This is what ``scripts/06_sample_benchmark.sh``
+   uses for the held-out benchmark.
+2. **Single-PDB mode** (``--input-pdb <file.pdb>``): build a graph on the
+   fly with :func:`catif_rl.data.graph_construction.pdb_to_sample_data`,
+   sample one sequence, and write the resulting FASTA into ``--output_dir``
+   under the PDB's basename. This is what ``scripts/08_run_case_studies.sh``
+   uses for the per-case redesigns.
+
+Batch mode, single-seed run on the held-out benchmark::
 
     python -u -m catif_rl.sampling.infer \\
       --test_dir   data/process/test \\
@@ -12,7 +22,7 @@ Single-seed run on the held-out benchmark::
       --output_dir runs/benchmark/catif_rl_r3/seed_1 \\
       --seed 1
 
-Five-seed sweep (matches ``scripts/06_sample_benchmark.sh``)::
+Batch mode, five-seed sweep (matches ``scripts/06_sample_benchmark.sh``)::
 
     for s in 1111 2222 3333 4444 5555; do
       python -u -m catif_rl.sampling.infer \\
@@ -21,6 +31,14 @@ Five-seed sweep (matches ``scripts/06_sample_benchmark.sh``)::
         --output_dir runs/benchmark/catif_rl_r3/seed_${s} \\
         --seed $s
     done
+
+Single-PDB mode (matches ``scripts/08_run_case_studies.sh``)::
+
+    python -u -m catif_rl.sampling.infer \\
+      --input-pdb  case_study/EC1.4.1.20_Lsphaericus/native.pdb \\
+      --ckpt_path  checkpoints/catif_rl_R3_epoch02.pt \\
+      --output_dir runs/case_studies/EC1.4.1.20_Lsphaericus \\
+      --seed 12345
 
 The checkpoint loader autodetects both the supervised EMA-tracked format
 (``ckpt['ema']``) and the RL policy format (``ckpt['model']`` only), and
@@ -34,6 +52,7 @@ import torch
 import random
 import numpy as np
 from ema_pytorch import EMA
+from torch_geometric.data import Batch
 from torch_geometric.loader import DataLoader
 from catif_rl.models.gradeif_app import EGNN_NET, GraDe_IF
 from catif_rl.data.large_dataset import Cath
@@ -66,28 +85,46 @@ def set_seed(seed: int):
 if __name__ == "__main__":
     # 1. Argument parsing
     p = argparse.ArgumentParser(description="GraDe_IF inference with EMA weights")
-    p.add_argument('--test_dir',   type=str, required=True, help="directory containing .pt test files")
+    src = p.add_mutually_exclusive_group(required=True)
+    src.add_argument('--test_dir',  type=str, default=None,
+                     help="directory containing .pt test graphs (batch mode)")
+    src.add_argument('--input-pdb', dest='input_pdb', type=str, default=None,
+                     help="single PDB file to redesign (single-PDB mode); built on the fly via catif_rl.data.graph_construction")
     p.add_argument('--ckpt_path',  type=str, required=True, help="path to .pt checkpoint with EMA weights")
-    p.add_argument('--batch_size', type=int, default=32, help="DataLoader batch_size")
+    p.add_argument('--batch_size', type=int, default=32, help="DataLoader batch_size (ignored in single-PDB mode)")
     p.add_argument('--device',     type=str, default='cuda:0', help="device, e.g. cuda:0 or cpu")
-    p.add_argument('--output_dir', type=str, required=True, help="directory to write fasta files")
+    p.add_argument('--output_dir', type=str, required=True, help="directory to write FASTA files")
     p.add_argument('--seed', type=int, default=-1, help='Random seed; set >=0 for reproducible DDIM sampling')
     args = p.parse_args()
+    set_seed(args.seed)
 
     # 2. Device & output directory
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # 3. Test-set DataLoader
-    test_ids = sorted([f for f in os.listdir(args.test_dir) if f.endswith('.pt')])
-    test_ds  = Cath(test_ids, args.test_dir)
-    test_loader = DataLoader(
-        test_ds,
-        batch_size=args.batch_size,
-        shuffle=False,
-        pin_memory=True,
-        num_workers=4
-    )
+    # 3. Input loader -- batch mode reads a directory of .pt files via Cath;
+    #    single-PDB mode builds one Data on the fly and wraps it in a single-element batch.
+    if args.input_pdb is not None:
+        from catif_rl.data.graph_construction import pdb_to_sample_data
+        single_data = pdb_to_sample_data(args.input_pdb)
+        if single_data is None:
+            raise RuntimeError(
+                f"failed to build a graph from {args.input_pdb}; "
+                "check that the PDB has at least the minimum number of residues "
+                "and that mkdssp is on PATH."
+            )
+        test_ids = [os.path.splitext(os.path.basename(args.input_pdb))[0] + '.pt']
+        test_loader = [Batch.from_data_list([single_data])]  # iterable of length 1
+    else:
+        test_ids = sorted([f for f in os.listdir(args.test_dir) if f.endswith('.pt')])
+        test_ds  = Cath(test_ids, args.test_dir)
+        test_loader = DataLoader(
+            test_ds,
+            batch_size=args.batch_size,
+            shuffle=False,
+            pin_memory=True,
+            num_workers=4
+        )
 
     # 4. Restore the network from the checkpoint and load EMA weights
     ckpt    = torch.load(args.ckpt_path, map_location=device)

@@ -1,8 +1,10 @@
 import os
-from catif_rl.data.cath_imem_2nd import Cath_imem,dataset_argument
+from pathlib import Path
+
+from catif_rl.data.cath_imem import Cath_imem
+from catif_rl.data.utils import dataset_argument, NormalizeProtein
 from torch.optim import Adam
-from torch_geometric.data import Batch,Data
-from catif_rl.data.utils import NormalizeProtein
+from torch_geometric.data import Batch, Data
 from Bio.PDB import PDBParser
 from Bio.PDB.DSSP import DSSP
 import torch.nn.functional as F
@@ -11,6 +13,12 @@ from tqdm import tqdm
 
 amino_acids_type = ['A', 'R', 'N', 'D', 'C', 'Q', 'E', 'G', 'H', 'I',
                 'L', 'K', 'M', 'F', 'P', 'S', 'T', 'W', 'Y', 'V']
+
+# Bundled NormalizeProtein statistics file used by every inference path.
+# pdb2graph() falls back to this when ``normalize_path`` is not specified.
+_DEFAULT_NORMALIZE_PATH = str(
+    Path(__file__).resolve().parent / "assets" / "mean_attr.pt"
+)
 
 def get_struc2ndRes(pdb_filename):
     struc_2nds_res_alphabet = ['E', 'L', 'I', 'T', 'H', 'B', 'G', 'S']
@@ -68,8 +76,30 @@ def prepare_graph(data):
     )
     return graph
 
-def pdb2graph(filename,normalize_path = 'dataset_src/mean_attr.pt'):
-    #### dataset  ####
+def pdb2graph(filename, normalize_path: str | None = None):
+    """Build a single PyG ``Data`` object from one PDB file.
+
+    Parameters
+    ----------
+    filename
+        Path to a ``.pdb`` file.
+    normalize_path
+        Path to the ``mean_attr.pt`` feature normalization statistics.
+        If ``None``, the bundled ``catif_rl/data/assets/mean_attr.pt``
+        is used.
+
+    Returns
+    -------
+    Data or None
+        The normalized graph with all raw fields (``distances``,
+        ``edge_dist``, ``mu_r_norm`` etc. preserved); call
+        :func:`prepare_graph` on it before feeding it to the diffusion
+        model. Returns ``None`` if graph construction fails (e.g. the
+        PDB has fewer than the minimum residues required).
+    """
+    if normalize_path is None:
+        normalize_path = _DEFAULT_NORMALIZE_PATH
+
     dataset_arg = dataset_argument(n=51)
     dataset = Cath_imem(dataset_arg['root'], dataset_arg['name'], split='test',
                                 divide_num=dataset_arg['divide_num'], divide_idx=dataset_arg['divide_idx'],
@@ -83,11 +113,28 @@ def pdb2graph(filename,normalize_path = 'dataset_src/mean_attr.pt'):
                 rec, c_alpha_coords, n_coords, c_coords, rec_coords, struc_2nd_res)
     if rec_graph:
         normalize_transform = NormalizeProtein(filename=normalize_path)
-        
         graph = normalize_transform(rec_graph)
         return graph
     else:
         return None
+
+
+def pdb_to_sample_data(pdb_path: str, normalize_path: str | None = None):
+    """Convenience: build a single inference-ready :class:`Data` from one PDB.
+
+    Composes :func:`pdb2graph` and :func:`prepare_graph` so callers
+    (``catif_rl.sampling.infer`` and ``catif_rl.sampling.inpaint`` when
+    invoked with a single-PDB flag) can get back a ``Data`` object with
+    the same schema that ``Cath.get`` produces from a pre-computed
+    ``.pt``: ``x`` (one-hot 20), ``extra_x``, ``pos``, ``edge_index``,
+    ``edge_attr``, ``ss``, ``sasa``.
+
+    Returns ``None`` if the PDB cannot be parsed into a valid graph.
+    """
+    raw = pdb2graph(pdb_path, normalize_path=normalize_path)
+    if raw is None:
+        return None
+    return prepare_graph(raw)
 
 
 
