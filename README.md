@@ -157,6 +157,7 @@ This project's source code is released under the [MIT License](LICENSE).
 Several upstream components and data sources are governed by other terms:
 
 - The graph-diffusion backbone [GraDe-IF](https://github.com/ykiiiiii/GraDe_IF) is MIT-licensed; the application wrapper `catif_rl/models/gradeif_app.py` is adapted from it with attribution.
+- [ESMFold / ESM-IF](https://github.com/facebookresearch/esm) (Meta AI Research) is MIT-licensed. ESMFold is used as the structural plausibility predictor during dataset construction, the GDC funnel, and structural evaluation; ESM-IF is also used as one of the inverse-folding baselines.
 - The [UniKP](https://github.com/Luo-SynBioLab/UniKP) kinetic predictor does not currently ship an explicit license — this repository depends on it (via subprocess only) under academic, non-commercial research conventions.
 - [DLKcat](https://github.com/SysBioChalmers/DLKcat) is released under GPL v3 and is invoked here only via subprocess.
 - [CataPro](https://github.com/zchwang/CataPro) is MIT-licensed.
