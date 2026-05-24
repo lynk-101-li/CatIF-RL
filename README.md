@@ -1,5 +1,10 @@
 # CatIF-RL
 
+<p align="center">
+  <img src="docs/figures/toc.jpg" alt="CatIF-RL graphical abstract" width="820">
+</p>
+<p align="center"><em>Graphical abstract — sample → score → KL-regularized GRPO update over a discrete-diffusion inverse-folding policy. Full description: bioRxiv preprint <a href="https://doi.org/10.64898/2026.05.11.724288">10.64898/2026.05.11.724288</a>.</em></p>
+
 [![bioRxiv](https://img.shields.io/badge/bioRxiv-10.64898%2F2026.05.11.724288-b00.svg)](https://doi.org/10.64898/2026.05.11.724288)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20357062.svg)](https://doi.org/10.5281/zenodo.20357062)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
