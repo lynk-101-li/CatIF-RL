@@ -501,7 +501,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument('--ref-ckpt', required=True)
     p.add_argument('--condition-dir', required=True)
     p.add_argument('--scored-csv', required=True)
-    p.add_argument('--output-dir', default='diffusion/results/rl_offline')
+    p.add_argument('--output-dir', default='runs/grpo_offline',
+                   help='where to write policy_epochXX.pt, train_log.jsonl, and per-epoch plots')
 
     p.add_argument('--device', default='cuda:0')
     p.add_argument('--epochs', type=int, default=1)

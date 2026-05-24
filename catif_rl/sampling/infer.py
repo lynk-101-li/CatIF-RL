@@ -1,22 +1,31 @@
 #!/usr/bin/env python
-# diffusion/inference.py
-
 """
-Example usage:
+DDIM inference for CatIF / CatIF-RL policies. Reads ``.pt`` condition graphs
+from ``--test_dir``, samples one sequence per graph at the given ``--seed``,
+and writes one FASTA per input graph into ``--output_dir``.
 
-python -u -m sampling.infrs_pred \
-  --test_dir   dataset/process/test \
-  --ckpt_path  diffusion/results/weight_rl/Nov19_epoch1/policy_epoch03.pt \
-  --output_dir sampling/output_test_dataset_mut_epoch1_Nov19 \
-  --seed 1
+Single-seed run on the held-out benchmark::
 
-for s in {1..5}; do
-  python -u -m sampling.infrs_pred \
-    --test_dir dataset/process/test \
-    --ckpt_path diffusion/results/weight_rl/Nov27.5_round1/policy_epoch01.pt \
-    --output_dir sampling/output_test_dataset_mut_round1_Nov27.5_seed${s} \
-    --seed $s
-done
+    python -u -m catif_rl.sampling.infer \\
+      --test_dir   data/process/test \\
+      --ckpt_path  checkpoints/catif_rl_R3_epoch02.pt \\
+      --output_dir runs/benchmark/catif_rl_r3/seed_1 \\
+      --seed 1
+
+Five-seed sweep (matches ``scripts/06_sample_benchmark.sh``)::
+
+    for s in 1111 2222 3333 4444 5555; do
+      python -u -m catif_rl.sampling.infer \\
+        --test_dir   data/process/test \\
+        --ckpt_path  checkpoints/catif_rl_R3_epoch02.pt \\
+        --output_dir runs/benchmark/catif_rl_r3/seed_${s} \\
+        --seed $s
+    done
+
+The checkpoint loader autodetects both the supervised EMA-tracked format
+(``ckpt['ema']``) and the RL policy format (``ckpt['model']`` only), and
+rebuilds the EGNN_NET / GraDe_IF from ``ckpt['config']`` or
+``ckpt['meta']['config']``.
 """
 
 import os

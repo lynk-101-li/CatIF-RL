@@ -1,30 +1,32 @@
 #!/usr/bin/env python
-# diffusion/inference.py
-
 """
-Example usage:
+DDIM inference with optional RePaint-style motif-preserving inpainting.
 
-# basic
-python -u -m sampling.infrs_pred \
-  --test_dir dataset/process/test \
-  --ckpt_path ... \
-  --output_dir output/normal
-  --seed 1
+Plain DDIM sampling::
 
-# Repaint sampling example:
-python -u -m sampling.infrs_pred \
-  --test_dir dataset/process/test \
-  --ckpt_path diffusion/results/ \
-  --output_dir sampling/ \
-  --no_diverse
-  --use_repaint \
-  --mask_indices "5,10-20" \
-  --repaint_jump_n 1 \
-  --seed 1
+    python -u -m catif_rl.sampling.inpaint \\
+      --test_dir   data/process/test \\
+      --ckpt_path  checkpoints/catif_rl_R3_epoch02.pt \\
+      --output_dir runs/sampling/plain \\
+      --seed 1
+
+Motif-preserving inpainting -- fix residues at the given 0-based indices to
+their native identity and resample the rest::
+
+    python -u -m catif_rl.sampling.inpaint \\
+      --test_dir       data/process/test \\
+      --ckpt_path      checkpoints/catif_rl_R3_epoch02.pt \\
+      --output_dir     runs/sampling/salr_inpaint \\
+      --use_repaint \\
+      --mask_indices   "151,179,235,239" \\
+      --repaint_jump_n 5 \\
+      --no_diverse \\
+      --seed 12345
+
+The mask example above corresponds to the four catalytic residues of
+Papaver bracteatum salutaridine reductase (case_study/EC1.1.1.248_SalR);
+see Algorithm S1 in the Supporting Information for the inpainting sampler.
 """
-
-#!/usr/bin/env python
-# diffusion/infrs_pred.py
 
 import os
 import argparse

@@ -1,36 +1,38 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-[Update] Dedup and alignment are now done on [ProID, ProSeq', SMILES].
-Scale-only normalization, plus per-sample
- - sum/3
- - dataset-level average = sum(mean3) / N
- - keep a/b detail tables and two original distribution figures, plus a new
-   sum/3 distribution figure (log y-axis)
- - per-file raw delta_lgKcat mean (mean_raw) before normalization
- - per-file raw q10_raw and q90_raw before normalization
- - one row each closest to q10_raw / q90_raw is exported to
-   *_q10_q90_samples.csv
- - summary table raw_stats_per_predictor.csv (mean_raw / q10_raw / q90_raw)
+RL-stage reward normalization for the three-predictor ensemble.
 
-[New] Export the reward data table:
- - columns: epoch, data_index, cond_name, group, ProID, SMILES, ProSeq,
-   ProSeq', sample_idx, seed, step, ckpt_path, mean_delta
- - mean_delta = mean3
+Reads the per-predictor delta_lgKcat CSVs produced after Stage 2 of an RL
+round (DLKcat / UniKP / CataPro), then for each round:
 
-[Usage]
- 1. Run with default arguments:
-    python3 delta_lgkcat_nrmlz_3_rl.py
+- Dedup / inner-join on the three keys [ProID, ProSeq', SMILES].
+- Scale-only normalize each predictor's delta_lgKcat (divide by q90 - q10;
+  fall back to std, then 1.0; no centering, sign preserved).
+- Average the three normalized scores into ``mean3`` (and DLKcat+UniKP into
+  ``mean2`` for diagnostics).
+- Write distribution figures and per-predictor raw stats.
+- Emit the per-row reward table consumed by ``catif_rl.training.grpo`` with
+  columns ``epoch, data_index, cond_name, group, ProID, SMILES, ProSeq,
+  ProSeq', sample_idx, seed, step, ckpt_path, mean_delta`` (``mean_delta``
+  = ``mean3``).
 
- 2. Run with explicit directories and filenames:
-    python3 delta_lgkcat_nrmlz_3_rl.py \
-      --in_dir "3_kcat_predictor_output_table/catif_rl/epoch1" \
-      --posi_dir "kcat_mean_table/catif_rl/epoch1" \
-      --fig_dir "figures/catif_rl/epoch1" \
-      --dlkcat "epoch1_Nov16_kcatpred_dlkcat.csv" \
-      --catapro "epoch1_Nov16_kcatpred_catapro.csv" \
-      --unikp "epoch1_Nov16_kcatpred_unikp.csv" \
-      --reward_file "epoch1_Nov16_reward_data.csv"
+Example (as invoked by ``scripts/05a_rl_round1.sh``)::
+
+    python -m catif_rl.reward.ensemble_rl \\
+      --in-dir       runs/grpo_round1 \\
+      --reward-file  runs/grpo_round1/round1_reward_data.csv
+
+Or with explicit input filenames::
+
+    python -m catif_rl.reward.ensemble_rl \\
+      --in-dir       runs/grpo_round1 \\
+      --posi-dir     runs/grpo_round1/stats \\
+      --fig-dir      runs/grpo_round1/figures \\
+      --dlkcat       round1_kcatpred_dlkcat.csv \\
+      --catapro      round1_kcatpred_catapro.csv \\
+      --unikp        round1_kcatpred_unikp.csv \\
+      --reward-file  runs/grpo_round1/round1_reward_data.csv
 """
 
 import argparse
@@ -43,18 +45,35 @@ import matplotlib.pyplot as plt
 def parse_args():
     parser = argparse.ArgumentParser(description="Delta lgKcat normalization + reward-data export")
 
-    # Path arguments
-    parser.add_argument("--in_dir", type=str, default="3_kcat_predictor_output_table/catif_rl/epoch2", help="input directory")
-    parser.add_argument("--posi_dir", type=str, default="kcat_mean_table/catif_rl/epoch2", help="output directory for stats")
-    parser.add_argument("--fig_dir", type=str, default="figures/catif_rl/epoch2", help="output directory for figures")
+    # Path arguments. --in-dir is the round directory (e.g. runs/grpo_round1)
+    # that holds the per-predictor CSVs; --posi-dir / --fig-dir default to
+    # subdirectories of --in-dir if not provided explicitly.
+    parser.add_argument("--in-dir", type=str, required=True,
+                        help="directory containing the three per-predictor CSVs (e.g. runs/grpo_round1)")
+    parser.add_argument("--posi-dir", type=str, default=None,
+                        help="output directory for stats CSVs (default: <in-dir>/stats)")
+    parser.add_argument("--fig-dir", type=str, default=None,
+                        help="output directory for figures (default: <in-dir>/figures)")
 
-    # File-name arguments
-    parser.add_argument("--dlkcat", type=str, default="epoch2_Nov18_kcatpred_dlkcat.csv", help="DLKcat prediction filename")
-    parser.add_argument("--catapro", type=str, default="epoch2_Nov18_kcatpred_catapro.csv", help="CataPro prediction filename")
-    parser.add_argument("--unikp", type=str, default="epoch2_Nov18_kcatpred_unikp.csv", help="UniKP prediction filename")
-    parser.add_argument("--reward_file", type=str, default="epoch2_Nov18_reward_data.csv", help="output reward-data filename")
+    # File-name arguments. These are relative to --in-dir. Defaults follow
+    # the round-N convention used by the predictor wrappers
+    # (e.g. round1_kcatpred_dlkcat.csv) -- override if your filenames differ.
+    parser.add_argument("--dlkcat", type=str, default="dlkcat_pred.csv",
+                        help="DLKcat prediction filename inside --in-dir")
+    parser.add_argument("--catapro", type=str, default="catapro_pred.csv",
+                        help="CataPro prediction filename inside --in-dir")
+    parser.add_argument("--unikp", type=str, default="unikp_pred.csv",
+                        help="UniKP prediction filename inside --in-dir")
+    parser.add_argument("--reward-file", type=str, required=True,
+                        help="output reward-data CSV (consumed by catif_rl.training.grpo)")
 
-    return parser.parse_args()
+    args = parser.parse_args()
+    # Default sub-directories under --in-dir if not given.
+    if args.posi_dir is None:
+        args.posi_dir = str(Path(args.in_dir) / "stats")
+    if args.fig_dir is None:
+        args.fig_dir = str(Path(args.in_dir) / "figures")
+    return args
 
 # Key change: dedup / alignment on three columns
 KEYS = ['ProID', "ProSeq'", 'SMILES']

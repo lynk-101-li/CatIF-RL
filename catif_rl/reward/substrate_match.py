@@ -1,35 +1,41 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Program: replace_proseq_from_fasta.py
+Replace the ``ProSeq'`` column in a (ProID, ProSeq, SMILES, ...) template
+CSV with mutant sequences loaded from a directory of per-design FASTA
+files, producing the (mutant, substrate) input expected by the *k*\\ :sub:`cat`
+predictor wrappers.
 
-Description:
-    Replace the ``ProSeq'`` column in a CSV with sequences loaded from a
-    directory of FASTA files. FASTA files are expected to be named
-    ``sequence_<ProID>.fasta`` or ``sequence_<ProID>.fa``, where <ProID>
-    matches the ``ProID`` column of the input CSV. When a matching FASTA
-    is found, its sequence overwrites that row's ``ProSeq'``; rows whose
-    ``ProID`` cannot be matched are kept as-is and a warning is printed.
+FASTA files are expected to be named ``sequence_<ProID>.fasta`` or
+``sequence_<ProID>.fa``, where ``<ProID>`` matches the ``ProID`` column of
+the template CSV. When a matching FASTA is found, its sequence overwrites
+that row's ``ProSeq'``; rows whose ``ProID`` cannot be matched are kept
+as-is and a warning is printed.
 
-Usage:
-    python replace_proseq_from_fasta.py <csv_path> <fasta_dir> <output_path>
+Usage (positional args -- as invoked by ``scripts/07_score_benchmark.sh``)::
 
-Example:
-    python replace_proseq_from_fasta.py test_mut_substrate_template.csv
+    python -m catif_rl.reward.substrate_match \\
+      <template_csv> <fasta_dir> <output_csv>
 
-Arguments:
-    csv_path   : Input CSV path; must contain columns ``ProID`` and ``ProSeq'``.
-                  e.g. output_gradeif_test_dataset_seed_12345.csv
-    fasta_dir  : Directory of FASTA files. Each file should be named
-                  sequence_<ProID>.fasta or sequence_<ProID>.fa.
-                  e.g. sequence_1024.fasta, sequence_2048.fa
-    output_path: Path of the new CSV to be written.
+Example, scoring the seed-1111 outputs of CatIF-RL R3::
 
-Output:
-    - The output CSV keeps all original columns; only ``ProSeq'`` is
-      overwritten with the corresponding FASTA sequence when a match exists.
-    - If some ProIDs have no corresponding FASTA file, a warning is printed:
-        Warning: no FASTA found for ProID(s): 101, 205, 309
+    python -m catif_rl.reward.substrate_match \\
+      data/brenda/test_mut_substrate_template.csv \\
+      runs/benchmark/catif_rl_r3/seed_1111 \\
+      runs/benchmark_scores/catif_rl_r3/test_mut_substrate_seed1111.csv
+
+Arguments
+---------
+template_csv : Input CSV path; must contain columns ``ProID`` and ``ProSeq'``.
+fasta_dir    : Directory of FASTA files named ``sequence_<ProID>.{fasta,fa}``.
+output_csv   : Destination CSV path (the same columns as ``template_csv``).
+
+Behaviour
+---------
+- The output CSV keeps all original columns; only ``ProSeq'`` is overwritten
+  with the corresponding FASTA sequence when a match exists.
+- If some ProIDs have no corresponding FASTA file, a warning is printed:
+  ``Warning: no FASTA found for ProID(s): 101, 205, 309``.
 """
 
 from __future__ import annotations

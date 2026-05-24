@@ -5,31 +5,34 @@
 Compute structural / sequence metrics for a directory of predicted PDB
 files against a reference PDB directory.
 
-Supported metrics (selectable via --metrics):
+Supported metrics (selectable via ``--metrics``):
     - CA-RMSD
     - Backbone-RMSD
     - Mean pLDDT (from B-factor)
     - Recovery rate (residue-level sequence identity vs. reference)
 
 The script writes one CSV row per prediction with the columns
-    ["ProID", "ProSeq", "ProSeq'", "Recovery_rate", "CA_RMSD",
-     "Backbone_RMSD", "Avg_pLDDT"]
-and appends a final "Mean" row averaging the requested metric columns.
+``["ProID", "ProSeq", "ProSeq'", "Recovery_rate", "CA_RMSD",
+"Backbone_RMSD", "Avg_pLDDT"]`` and appends a final ``"Mean"`` row
+averaging the requested metric columns.
 
-Examples
---------
-# Default (RMSD + pLDDT):
-python -m catif_rl.evaluation.structural \\
-  --ref-dir  dataset/raw/test \\
-  --pred-dir sampling/mut_seq2pdb/pdb_Catif_RL_Nov26_test_mut_1 \\
-  --csv-out  evaluation/pred_output_rmsd_plddt_table/metrics_default.csv
+Examples (as invoked by ``scripts/03_run_gdc.sh`` and ``07_score_benchmark.sh``)
+-------------------------------------------------------------------------------
 
-# All three metrics:
-python -m catif_rl.evaluation.structural \\
-  --ref-dir  dataset/raw/test \\
-  --pred-dir sampling/mut_seq2pdb/test_output_ProteinMPNN_pdb_1 \\
-  --csv-out  evaluation/pred_output_rmsd_plddt_table/rmsd_plddt_proteinmpnn_test_mut_1.csv \\
-  --metrics  rmsd,plddt,recovery
+Default RMSD + pLDDT pass on the held-out benchmark refolds::
+
+    python -m catif_rl.evaluation.structural \\
+      --ref-dir  data/raw/test \\
+      --pred-dir runs/benchmark_scores/catif_rl_r3/refold_seed1111 \\
+      --csv-out  runs/benchmark_scores/catif_rl_r3/rmsd_plddt.csv
+
+All three metrics, used during the GDC structural gate::
+
+    python -m catif_rl.evaluation.structural \\
+      --ref-dir  data/raw/enzymeif/train_and_validation \\
+      --pred-dir runs/gdc/refold \\
+      --csv-out  runs/gdc/rmsd_plddt_recovery.csv \\
+      --metrics  rmsd,plddt,recovery
 """
 
 import os, re, csv, argparse
@@ -108,9 +111,9 @@ def build_ref_path(ref_dir: str, pred_fname: str, ref_pattern: str) -> str:
 
 def parse_args():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--ref-dir",  default="dataset/raw/test", help="reference PDB directory")
-    ap.add_argument("--pred-dir", default="sampling/mut_seq2pdb/pdb_Catif_RL_Nov26_test_mut_1", help="predicted PDB directory")
-    ap.add_argument("--csv-out",  default="evaluation/pred_output_rmsd_plddt_table/metrics.csv", help="output CSV path")
+    ap.add_argument("--ref-dir",  required=True, help="reference PDB directory (e.g. data/raw/test)")
+    ap.add_argument("--pred-dir", required=True, help="predicted PDB directory (e.g. runs/benchmark_scores/<method>/refold_seedXXXX)")
+    ap.add_argument("--csv-out",  required=True, help="output CSV path (e.g. runs/benchmark_scores/<method>/rmsd_plddt.csv)")
     ap.add_argument("--ref-pattern", default="{fname}", help='reference filename template; default is matching basename, others such as "{stem}.pdb" supported')
     ap.add_argument(
         "--metrics",

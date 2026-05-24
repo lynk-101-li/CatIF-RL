@@ -1,36 +1,40 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Sample raw RL candidates (no scoring) and export to CSV: epochX_raw.csv.
+Bulk-sample candidate sequences from a CatIF / CatIF-RL policy on a
+collection of conditioning backbones (no scoring), and write one row per
+sample to a CSV that ``catif_rl.reward.ensemble_rl`` later consumes.
 
-- Supports multiple condition-dirs (train / validation).
-- Reuses the EMA + DDIM sampling flow from infrs_preds.py (sequences only).
-- Groups by {ProID, SMILES} as group_id (option A).
-- Draws K samples per condition (--group_size).
-- Output columns: data_index, cond_name, group, ProID, SMILES, wt_seq, seq,
-  sample_idx, seed, step, ckpt_path
+- Supports multiple condition directories (e.g. train + valid backbones).
+- Wraps the same EMA + DDIM sampling path as ``catif_rl.sampling.infer``.
+- Groups samples by ``{ProID, SMILES}`` as the GRPO group identifier.
+- Draws K samples per condition (``--group-size``).
+- Output columns: ``epoch, data_index, cond_name, group, ProID, SMILES,
+  ProSeq, ProSeq', sample_idx, seed, step, ckpt_path, recovery, perplexity``.
 
-Example:
-python -m sampling.sample_rl \
-  --condition_dirs dataset_src/data_split_for_gradeif_training/enzyme_train_and_valid_dataset \
-  --pairs_csv KcatPred/brenda_train_and_dev_set.csv \
-  --ckpt_path diffusion/results/weight_rl/Nov19_epoch1/policy_epoch03.pt \
-  --epoch 1 \
-  --group_size 5 \
-  --step 100 \
-  --out_csv sampling/epoch2_raw_Nov19.csv \
-  --device cuda:0 \
-  --seed 11 \
-  --diverse
+Example (as invoked by ``scripts/05a_rl_round1.sh``)::
+
+    python -m catif_rl.sampling.batch \\
+      --condition-dirs data/process/train data/process/valid \\
+      --pairs-csv      data/brenda/brenda_train_and_dev_set.csv \\
+      --ckpt-path      checkpoints/catif_Sep24_epoch228.pt \\
+      --epoch 1 \\
+      --group-size 5 \\
+      --step 100 \\
+      --out-csv runs/grpo_round1/round1_raw_samp.csv \\
+      --device cuda:0 \\
+      --seed 11 \\
+      --diverse
 
 Notes:
-- pairs_csv must contain at least ``ProID`` and ``SMILES``. If a ``cond_name``
-  column is present, it is used directly; otherwise the script falls back to
-  matching ``{ProID}.pt`` condition files.
+- ``pairs-csv`` must contain at least ``ProID`` and ``SMILES``. If a
+  ``cond_name`` column is present it is used directly; otherwise the script
+  falls back to matching ``{ProID}.pt`` condition files in
+  ``--condition-dirs``.
+- For the supervised CatIF starting point use
+  ``checkpoints/catif_Sep24_epoch228.pt``; for subsequent RL rounds use
+  the previous round's ``runs/grpo_round{N-1}/policy_epoch02.pt``.
 """
-
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import os
 import csv
@@ -158,19 +162,19 @@ def guess_cond_name_for_proid(proid: str, cond_files: set[str]) -> str | None:
 
 def main():
     p = argparse.ArgumentParser(description="Sample RL raw candidates from GraDe_IF and export CSV.")
-    p.add_argument('--condition_dirs', nargs='+', required=True,
+    p.add_argument('--condition-dirs', nargs='+', required=True,
                    help='one or more dirs containing .pt condition graphs')
-    p.add_argument('--pairs_csv', required=True,
+    p.add_argument('--pairs-csv', required=True,
                    help='CSV with at least columns: ProID, SMILES[, cond_name]')
-    p.add_argument('--ckpt_path', required=True,
+    p.add_argument('--ckpt-path', required=True,
                    help='checkpoint (.pt) with EMA for sampling (catif starting point)')
-    p.add_argument('--out_csv', default='epoch_raw.csv',
+    p.add_argument('--out-csv', default='epoch_raw.csv',
                    help='output CSV path')
     p.add_argument('--epoch', type=int, default=1,
                    help='epoch tag written into the CSV (recordkeeping)')
-    p.add_argument('--group_size', type=int, default=4,
+    p.add_argument('--group-size', type=int, default=4,
                    help='K: number of samples per condition')
-    p.add_argument('--batch_size', type=int, default=8,
+    p.add_argument('--batch-size', type=int, default=8,
                    help='graphs per forward DDIM call (loading only; does not change the K-per-condition logic)')
     p.add_argument('--step', type=int, default=100,
                    help='DDIM sampling step')
@@ -178,7 +182,7 @@ def main():
                    help='stochastic sampling (True) or greedy (False)')
     p.add_argument('--device', default='cuda:0')
     p.add_argument('--seed', type=int, default=123)
-    p.add_argument('--log_every', type=int, default=50,
+    p.add_argument('--log-every', type=int, default=50,
                    help='number of samples between rolling recovery/perplexity log lines')
     args = p.parse_args()
 
