@@ -1,5 +1,5 @@
 {
-    "description": "Fixed catalytic residues for the salutaridine reductase (SalR) motif-preserving redesign case study. Indices are 0-based for direct use with the --mask CLI flag of catif_rl.sampling.inpaint.",
+    "description": "Fixed catalytic residues for the salutaridine reductase (SalR) motif-preserving redesign case study. Indices are 0-based; pass them via the --fix CLI flag of catif_rl.sampling.inpaint (these residues will be PRESERVED at their native identities, every other residue will be redesigned). Do NOT pass them as --design-indices, which would do the opposite. The legacy --mask flag is a deprecated alias of --fix.",
     "fixed_positions_zero_based": [151, 179, 235, 239],
     "fixed_positions_one_based": [152, 180, 236, 240],
     "residue_identities": ["N", "S", "Y", "K"],

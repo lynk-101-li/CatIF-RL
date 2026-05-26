@@ -11,8 +11,15 @@ sampling:
 
 mask:
   # Mask convention (manuscript §2.6):
-  #   m_i = 1  -> position i is fixed to the native residue
-  #   m_i = 0  -> position i is designable
-  # Provide via --mask CLI flag as a comma-separated list of designable indices
-  # (0-based), e.g. "5,10-20,35".
+  #   m_i = 1  -> position i is FIXED to the native residue (preserved)
+  #   m_i = 0  -> position i is DESIGNABLE (resampled)
+  #
+  # Two CLI spellings are exposed by catif_rl.sampling.inpaint:
+  #   --fix <indices>             list of 0-based positions to PRESERVE
+  #                               (mask=1; everything else mask=0). This is the
+  #                               default motif-preserving usage.
+  #   --design-indices <indices>  list of 0-based positions to REDESIGN
+  #                               (mask=0; everything else mask=1).
+  # The legacy --mask flag is a deprecated alias of --fix and emits a
+  # DeprecationWarning when used.
   index_convention: zero_based

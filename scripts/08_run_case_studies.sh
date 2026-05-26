@@ -33,10 +33,11 @@ SALR_DIR="$OUT_BASE/EC1.1.1.248_SalR"
 mkdir -p "$SALR_DIR"
 echo "[case_studies] motif-preserving inpainting: SalR"
 
-# Mask = catalytic residues Asn152, Ser180, Tyr236, Lys240 (0-based indices).
+# Fix the four catalytic residues Asn152, Ser180, Tyr236, Lys240 to their
+# native identities and redesign every other residue. Indices are 0-based.
 python -m catif_rl.sampling.inpaint \
   --pdb "$REPO_ROOT/case_study/EC1.1.1.248_SalR/native.pdb" \
-  --mask 151,179,235,239 \
+  --fix 151,179,235,239 \
   --ckpt "$CATIF_RL_CKPT" \
   --u 5 \
   --seed "$CASE_STUDY_SEED" \

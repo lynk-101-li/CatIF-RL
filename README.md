@@ -73,14 +73,17 @@ Run the inverse-folding demo notebook end-to-end:
 jupyter lab notebooks/01_quickstart_inference.ipynb
 ```
 
-Or, from the command line, generate one mutant for a held-out enzyme using a pretrained policy:
+Or, from the command line, generate one mutant for a held-out enzyme using a pretrained policy. The single-PDB mode of `catif_rl.sampling.infer` builds the graph on the fly, so you do not need to pre-process the test set:
 
 ```bash
-POLICY_CKPT=checkpoints/catif_rl_R3.pt \
-TEST_PDB=case_study/EC1.4.1.20_Lsphaericus/native.pdb \
-OUTPUT=runs/quickstart \
-bash scripts/06_sample_benchmark.sh
+python -m catif_rl.sampling.infer \
+  --input-pdb  case_study/EC1.4.1.20_Lsphaericus/native.pdb \
+  --ckpt_path  checkpoints/catif_rl_R3_epoch02.pt \
+  --output_dir runs/quickstart \
+  --seed 12345
 ```
+
+(`scripts/06_sample_benchmark.sh` is for the full 5-seed × 11-method benchmark sweep and expects a directory of pre-processed `.pt` graphs via `TEST_DIR`, plus per-method checkpoint env vars; it is not a single-PDB entry point.)
 
 Pretrained weights and processed graph datasets must be downloaded first; see `checkpoints/README.md` and `data/README.md`.
 
@@ -108,13 +111,13 @@ CatIF-RL ships a discrete subgraph inpainting sampler (Algorithm S1 in the manus
 ```bash
 python -m catif_rl.sampling.inpaint \
   --pdb case_study/EC1.1.1.248_SalR/native.pdb \
-  --mask 151,179,235,239 \
-  --ckpt checkpoints/catif_rl_R3.pt \
+  --fix 151,179,235,239 \
+  --ckpt checkpoints/catif_rl_R3_epoch02.pt \
   --u 5 \
   --output runs/salr_inpaint.fasta
 ```
 
-The mask indices are 0-based; the example above corresponds to the four catalytic residues Asn152, Ser180, Tyr236, Lys240 of *Papaver bracteatum* salutaridine reductase.
+The `--fix` indices are 0-based and identify the residues to *preserve*. The example above corresponds to the four catalytic residues Asn152, Ser180, Tyr236, Lys240 of *Papaver bracteatum* salutaridine reductase; everything outside that set is redesigned. The complementary flag `--design-indices` does the opposite (preserve everything *except* the listed positions). A legacy `--mask` alias is accepted and currently routes to `--fix` for backward compatibility, with a deprecation warning.
 
 ## Data and pretrained checkpoints
 

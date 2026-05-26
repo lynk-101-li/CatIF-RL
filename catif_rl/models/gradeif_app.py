@@ -211,12 +211,42 @@ class DiscreteUniformTransition:
         return q_x
 
 class BlosumTransition:
-    def __init__(self, blosum_path='dataset_src/blosum_substitute.pt',x_classes=20,timestep = 500):
-        try:
-            self.original_score,self.temperature_list,self.Qt_temperature = torch.load(blosum_path)['original_score'], torch.load(blosum_path)['Qtb_temperature'],torch.load(blosum_path)['Qt_temperature'] 
-        except FileNotFoundError:
-            blosum_path = '../'+blosum_path
-            self.original_score,self.temperature_list,self.Qt_temperature = torch.load(blosum_path)['original_score'], torch.load(blosum_path)['Qtb_temperature'],torch.load(blosum_path)['Qt_temperature'] 
+    # Default points at the bundled asset shipped under catif_rl/data/assets/.
+    # The legacy `dataset_src/blosum_substitute.pt` and the `../` fallback are
+    # kept as secondary search paths for backwards compatibility with code
+    # paths that pre-date the package reorganisation.
+    _BUNDLED_BLOSUM_PATH = str(
+        (__import__('pathlib').Path(__file__).resolve().parent.parent
+         / 'data' / 'assets' / 'blosum_substitute.pt')
+    )
+
+    def __init__(self, blosum_path=None, x_classes=20, timestep=500):
+        # Resolution order:
+        #   1. caller-supplied `blosum_path`
+        #   2. bundled asset under catif_rl/data/assets/
+        #   3. legacy `dataset_src/blosum_substitute.pt`
+        #   4. legacy `../dataset_src/blosum_substitute.pt`
+        import os
+        candidates = []
+        if blosum_path is not None:
+            candidates.append(blosum_path)
+        candidates.extend([
+            self._BUNDLED_BLOSUM_PATH,
+            'dataset_src/blosum_substitute.pt',
+            '../dataset_src/blosum_substitute.pt',
+        ])
+        loaded = None
+        for cand in candidates:
+            if cand and os.path.exists(cand):
+                loaded = torch.load(cand)
+                break
+        if loaded is None:
+            raise FileNotFoundError(
+                "could not locate blosum_substitute.pt; tried: " + ", ".join(repr(c) for c in candidates)
+            )
+        self.original_score   = loaded['original_score']
+        self.temperature_list = loaded['Qtb_temperature']
+        self.Qt_temperature   = loaded['Qt_temperature']
         self.X_classes = x_classes
         self.timestep = timestep
         temperature_list = self.temperature_list.unsqueeze(dim=0)

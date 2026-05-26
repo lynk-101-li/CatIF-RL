@@ -48,6 +48,19 @@ data/
 │                                  # Shared held-out DLKcat benchmark
 │                                  # (manuscript §2.7).
 │
+├── brenda/                        # in Zenodo deposit; BRENDA-derived
+│   │                              # (ProID, ProSeq, SMILES, ...) template CSVs
+│   │                              # consumed by the RL and benchmark scripts.
+│   ├── brenda_train_and_dev_set.csv      # consumed by scripts/05a/b/c_rl_round*.sh
+│   │                              # to define the (enzyme, substrate) pool for
+│   │                              # GRPO outer-loop sampling. Columns: ProID,
+│   │                              # ProSeq, SMILES (+ cond_name optional).
+│   └── test_mut_substrate_template.csv   # consumed by scripts/07_score_benchmark.sh.
+│                                  # Per-benchmark-enzyme template into which
+│                                  # generated mutant sequences are spliced before
+│                                  # k_cat scoring. Columns: ProID, ProSeq, ProSeq',
+│                                  # SMILES.
+│
 ├── gdc/                           # in Zenodo deposit
 │   └── gdc_variants_6034.csv      # 6,034 rows; columns: Group, ProID, ProSeq', mean3.
 │                                  # Each row corresponds to one PDB under data/raw/catif/.
@@ -90,15 +103,17 @@ their training data:
 
 Only the held-out test set (`data/raw/test/`) is shared across all three stages.
 
-## How to obtain it
+## Reconstructing from public primary sources (if you do not use the Zenodo deposit)
 
-A Zenodo archive will be linked here once the deposit is finalised. Until
-then, the dataset can be reconstructed from public sources:
+The Zenodo archive linked above is the recommended path. If for some reason
+you want to rebuild from scratch, all primary sources are public:
 
 - **DLKcat-BRENDA records** — Li et al., 2022 [12]; obtainable from the
   DLKcat repository (`SysBioChalmers/DLKcat`).
 - **CATH v4.2.0 backbones** — Sillitoe et al., *Nucleic Acids Res.* 49 (2021).
-  Available at <http://www.cathdb.info/>.
+  Available at <http://www.cathdb.info/>. (The repo will auto-fetch these
+  on first run via `catif_rl/data/download_pdb.py`; manual download is not
+  required.)
 - **ESMFold predicted structures** — generated locally with the `esm`
   Python package (see `external/README.md`).
 

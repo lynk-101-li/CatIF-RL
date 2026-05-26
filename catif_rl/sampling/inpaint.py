@@ -10,22 +10,26 @@ Plain DDIM sampling::
       --output_dir runs/sampling/plain \\
       --seed 1
 
-Motif-preserving inpainting -- fix residues at the given 0-based indices to
-their native identity and resample the rest::
+Motif-preserving inpainting -- *preserve* the residues at the given 0-based
+indices (catalytic / functional residues) and *redesign* every other position::
 
     python -u -m catif_rl.sampling.inpaint \\
-      --test_dir       data/process/test \\
-      --ckpt_path      checkpoints/catif_rl_R3_epoch02.pt \\
-      --output_dir     runs/sampling/salr_inpaint \\
-      --use_repaint \\
-      --mask_indices   "151,179,235,239" \\
-      --repaint_jump_n 5 \\
-      --no_diverse \\
-      --seed 12345
+      --pdb     case_study/EC1.1.1.248_SalR/native.pdb \\
+      --ckpt    checkpoints/catif_rl_R3_epoch02.pt \\
+      --output  runs/case_studies/EC1.1.1.248_SalR/designed.fasta \\
+      --fix     "151,179,235,239" \\
+      --u       5 \\
+      --seed    12345 \\
+      --no_diverse
 
-The mask example above corresponds to the four catalytic residues of
-Papaver bracteatum salutaridine reductase (case_study/EC1.1.1.248_SalR);
-see Algorithm S1 in the Supporting Information for the inpainting sampler.
+The example above corresponds to the four catalytic residues of Papaver
+bracteatum salutaridine reductase (case_study/EC1.1.1.248_SalR): Asn152,
+Ser180, Tyr236, Lys240 (0-based: 151, 179, 235, 239). See Algorithm S1 in
+the Supporting Information for the RePaint-style inpainting sampler.
+
+Mask semantics (subtle but important): ``--fix N`` keeps residue N at its
+native identity and redesigns everything else; ``--design-indices N`` does
+the opposite. ``--mask N`` is a deprecated alias of ``--fix``.
 """
 
 import os
@@ -81,12 +85,44 @@ def parse_mask_indices(indices_str):
                 indices.add(int(part))
     return sorted(list(indices))
 
-def create_batch_mask(batch, user_indices, device):
+def create_batch_mask(batch, user_indices, device, semantics='fix'):
+    """Build a per-node global mask under one of two semantics.
+
+    The mask uses the convention ``1 = Keep (ground-truth)``,
+    ``0 = Inpaint (resample / redesign)``.
+
+    Parameters
+    ----------
+    batch
+        A PyG batch with ``batch.x`` and (optionally) ``batch.ptr``.
+    user_indices
+        Per-graph 0-based residue indices passed from the CLI.
+    device
+        Target device.
+    semantics
+        ``'fix'`` (default) -- the ``user_indices`` are the residues to
+        *preserve*: their mask is set to 1, every other residue's mask is 0.
+        This matches the README's motif-preserving intent: ``--fix N`` means
+        residue N is held to its native identity, everything else is
+        redesigned.
+
+        ``'design'`` -- the ``user_indices`` are the residues to *redesign*:
+        their mask is set to 0, every other residue's mask is 1. This is
+        the original convention used by the deprecated ``--mask`` flag in
+        early versions of this script; it is kept for forwards compatibility.
     """
-    Build a global mask: 1=Keep(GT), 0=Inpaint(Gen).
-    """
+    if semantics not in ('fix', 'design'):
+        raise ValueError(f"semantics must be 'fix' or 'design'; got {semantics!r}")
+
     total_nodes = batch.x.shape[0]
-    mask = torch.ones((total_nodes, 1), device=device)  # keep everything by default
+    if semantics == 'fix':
+        # Default = design everything; only the listed indices are kept.
+        mask = torch.zeros((total_nodes, 1), device=device)
+        marked_value = 1.0
+    else:
+        # Default = keep everything; only the listed indices are redesigned.
+        mask = torch.ones((total_nodes, 1), device=device)
+        marked_value = 0.0
 
     if not hasattr(batch, 'ptr'):
         ptr = [0, total_nodes]
@@ -101,7 +137,7 @@ def create_batch_mask(batch, user_indices, device):
         for local_idx in user_indices:
             if local_idx < length:
                 global_idx = start_node + local_idx
-                mask[global_idx] = 0.0
+                mask[global_idx] = marked_value
 
     return mask
 
@@ -234,20 +270,67 @@ if __name__ == "__main__":
     p.add_argument('--step',       type=int, default=50, help="DDIM step size")
     p.add_argument('--no_diverse', action='store_true', help="if set, disables diverse sampling (uses argmax)")
 
-    # Repaint args. ``--mask`` and ``--u`` are short aliases for the long forms
-    # (--mask_indices, --repaint_jump_n). Passing --mask / --u implicitly turns
-    # on --use_repaint so the case-study CLI in scripts/08_run_case_studies.sh
-    # need not state it explicitly.
-    p.add_argument('--use_repaint', action='store_true', help="enable Repaint mode")
-    p.add_argument('--mask_indices', '--mask', dest='mask_indices', type=str, default="",
-                   help="0-based indices to repaint, e.g. '10-20,35'")
+    # RePaint mode and the residues it operates on.
+    #
+    # The mask has two complementary spellings:
+    #
+    #   --fix INDICES             residues that must be *preserved* (motif-
+    #                             preserving redesign). This is the
+    #                             README-documented intent.
+    #   --design-indices INDICES  residues that must be *redesigned*
+    #                             (everything else is held to its native
+    #                             identity).
+    #
+    # ``--mask`` is kept as a deprecated alias of ``--fix`` for backward
+    # compatibility with the original README / case-study docs that used
+    # "mask" loosely to mean "the motif you want to preserve". Passing
+    # any of the three implicitly enables --use_repaint.
+    p.add_argument('--use_repaint', action='store_true',
+                   help="enable Repaint mode (auto-enabled by --fix / --design-indices / --mask)")
+    p.add_argument('--fix', dest='fix_indices', type=str, default="",
+                   help="0-based residue indices to PRESERVE, e.g. '151,179,235,239' "
+                        "(motif-preserving redesign)")
+    p.add_argument('--design-indices', dest='design_indices', type=str, default="",
+                   help="0-based residue indices to REDESIGN; every other residue is kept native. "
+                        "Complement of --fix.")
+    p.add_argument('--mask', '--mask_indices', dest='mask_legacy', type=str, default="",
+                   help="DEPRECATED alias of --fix; will be removed in a future release")
     p.add_argument('--repaint_jump_n', '--u', dest='repaint_jump_n', type=int, default=10,
                    help="repaint resampling count (default 10); 1 disables the jump-back")
 
     args = p.parse_args()
 
-    # If the user passed --mask or --u (i.e. anything that implies inpainting),
-    # auto-enable --use_repaint. This keeps the case-study CLI minimal.
+    # Resolve the three spellings into a single (indices, semantics) pair.
+    # Reject ambiguous combinations rather than guessing.
+    _supplied = [(name, val) for name, val in
+                 [('fix', args.fix_indices),
+                  ('design-indices', args.design_indices),
+                  ('mask', args.mask_legacy)] if val]
+    if len(_supplied) > 1:
+        names = ", ".join("--" + n for n, _ in _supplied)
+        raise SystemExit(f"only one of {names} may be specified")
+    if args.mask_legacy:
+        import warnings
+        warnings.warn(
+            "--mask is deprecated and will be removed in a future release. "
+            "Use --fix for motif-preserving (preserve listed residues) or "
+            "--design-indices for the complement.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        args.mask_indices = args.mask_legacy
+        args.mask_semantics = 'fix'           # README intent
+    elif args.fix_indices:
+        args.mask_indices = args.fix_indices
+        args.mask_semantics = 'fix'
+    elif args.design_indices:
+        args.mask_indices = args.design_indices
+        args.mask_semantics = 'design'
+    else:
+        args.mask_indices = ""
+        args.mask_semantics = 'fix'           # irrelevant when mask is empty
+
+    # Auto-enable --use_repaint whenever any mask spelling was supplied.
     if args.mask_indices and not args.use_repaint:
         args.use_repaint = True
 
@@ -335,8 +418,10 @@ if __name__ == "__main__":
     # Print mode info
     if args.use_repaint:
         indices = parse_mask_indices(args.mask_indices)
+        sem_label = ("FIXED (preserved)" if args.mask_semantics == 'fix'
+                     else "DESIGNED (redesigned)")
         print(f"[Mode] Repaint | Jump N: {args.repaint_jump_n} | Diverse: {is_diverse}")
-        print(f"[Masked Indices (Inpainting)] {indices}")
+        print(f"[{sem_label} residues] {indices}")
     else:
         print(f"[Mode] Standard Generation | Diverse: {is_diverse}")
 
@@ -356,9 +441,10 @@ if __name__ == "__main__":
             if args.use_repaint:
                 # 1. Prepare GT
                 gt_x = batch.x.clone()
-                # 2. Build the mask
+                # 2. Build the mask -- semantics resolved from --fix / --design-indices / --mask
                 user_mask_indices = parse_mask_indices(args.mask_indices)
-                mask = create_batch_mask(batch, user_mask_indices, device)
+                mask = create_batch_mask(batch, user_mask_indices, device,
+                                         semantics=args.mask_semantics)
 
                 # 3. Repaint sampling
                 zt, pred_onehot = repaint_ddim_sample(
