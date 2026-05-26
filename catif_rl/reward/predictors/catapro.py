@@ -47,6 +47,7 @@ def predict(
     rl_round_tag: Optional[str] = None,
     rl_subset_tag: Optional[str] = None,
     conda_env: str = _CONDA_ENV,
+    output_dir: Optional[Path] = None,
 ) -> Path:
     """Run CataPro on a (ProID, ProSeq, SMILES) CSV.
 
@@ -54,7 +55,10 @@ def predict(
     ``rl_subset_tag`` (these become positional arguments to
     ``run_catapro_rl.sh``).
 
-    Returns the path to the generated ``*_kcatpred_catapro.csv``.
+    Returns the path to the generated ``*_kcatpred_catapro.csv``. When
+    ``output_dir`` is supplied, the upstream output is additionally
+    copied to ``<output_dir>/catapro_pred.csv`` (the canonical filename
+    consumed downstream) and that path is returned.
     """
 
     if shutil.which("conda") is None:
@@ -65,8 +69,8 @@ def predict(
     results_dir = inference_dir / "results"
     results_dir.mkdir(parents=True, exist_ok=True)
 
-    input_csv = input_csv.resolve()
-    output_csv = results_dir / (input_csv.stem + "_kcatpred_catapro.csv")
+    input_csv = Path(input_csv).resolve()
+    upstream_output = results_dir / (input_csv.stem + "_kcatpred_catapro.csv")
 
     if mode == "rl":
         if rl_round_tag is None or rl_subset_tag is None:
@@ -82,4 +86,11 @@ def predict(
         "bash " + shell
     )
     subprocess.run(["bash", "-c", cmd], check=True)
-    return output_csv
+
+    if output_dir is not None:
+        output_dir = Path(output_dir).resolve()
+        output_dir.mkdir(parents=True, exist_ok=True)
+        canonical = output_dir / "catapro_pred.csv"
+        shutil.copyfile(upstream_output, canonical)
+        return canonical
+    return upstream_output

@@ -32,20 +32,25 @@ all consume.
 
 from __future__ import annotations
 
+import argparse
 import glob
+import sys
 from pathlib import Path
 
 import pandas as pd
 
 # ----------------------------------------------------------------------
-# Paths
+# Default paths (overridable via CLI)
 # ----------------------------------------------------------------------
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
-KCAT_DIR = ROOT / "materials/05_baseline_outputs/kcat_rr_metrics"
-RMSD_DIR = ROOT / "materials/05_baseline_outputs/rmsd_pldddt_metrics"
 
-OUT_CSV = HERE / "master_per_protein.csv"
+# Legacy locations the user actually used to produce the published master CSV.
+# In the released repo these are not present; --score-dir or --kcat-dir/--rmsd-dir
+# should be used to point at runs/benchmark_scores/ instead.
+DEFAULT_KCAT_DIR = ROOT / "materials/05_baseline_outputs/kcat_rr_metrics"
+DEFAULT_RMSD_DIR = ROOT / "materials/05_baseline_outputs/rmsd_pldddt_metrics"
+DEFAULT_OUT_CSV  = HERE / "master_per_protein.csv"
 
 # ----------------------------------------------------------------------
 # Per-baseline configuration
@@ -130,10 +135,10 @@ def _normalise_cols(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _load_kcat(globs: list[str]) -> pd.DataFrame:
+def _load_kcat(globs: list[str], kcat_dir: Path) -> pd.DataFrame:
     parts = []
     for g in globs:
-        for path in sorted(glob.glob(str(KCAT_DIR / g))):
+        for path in sorted(glob.glob(str(kcat_dir / g))):
             df = _normalise_cols(pd.read_csv(path))
             parts.append(df)
     if not parts:
@@ -192,42 +197,32 @@ def _per_protein_rmsd(rmsd_csv: Path) -> pd.DataFrame:
 # Main
 # ----------------------------------------------------------------------
 
-def main() -> None:
-    print(f"[paths] KCAT_DIR = {KCAT_DIR}")
-    print(f"[paths] RMSD_DIR = {RMSD_DIR}")
-    print(f"[paths] OUT_CSV  = {OUT_CSV}")
-
+def _build_master_from_baselines(kcat_dir: Path, rmsd_dir: Path) -> pd.DataFrame:
+    """Aggregate per-baseline outputs using the BASELINES glob table."""
     per_baseline: dict[str, pd.DataFrame] = {}
     for name, cfg in BASELINES.items():
         print(f"\n[load] {name}")
-
-        # ---- delta_lgKcat source (kcat_globs) ----
-        kcat_df = _load_kcat(cfg["kcat_globs"])
+        kcat_df = _load_kcat(cfg["kcat_globs"], kcat_dir)
         if kcat_df.empty:
             print(f"  [warn] no kcat data found for {name} (globs: {cfg['kcat_globs']})")
             continue
         n_kcat = len({p for g in cfg["kcat_globs"]
-                      for p in glob.glob(str(KCAT_DIR / g))})
-
-        # ---- recovery source (recovery_globs if specified, else kcat_globs) ----
+                      for p in glob.glob(str(kcat_dir / g))})
         rec_globs = cfg.get("recovery_globs") or cfg["kcat_globs"]
-        rec_df = _load_kcat(rec_globs)
+        rec_df = _load_kcat(rec_globs, kcat_dir)
         n_rec = len({p for g in rec_globs
-                     for p in glob.glob(str(KCAT_DIR / g))})
+                     for p in glob.glob(str(kcat_dir / g))})
         if rec_globs is cfg["kcat_globs"] or rec_globs == cfg["kcat_globs"]:
             print(f"  kcat & recovery: {n_kcat} file(s), {len(kcat_df):,} rows")
         else:
             print(f"  kcat:     {n_kcat} file(s), {len(kcat_df):,} rows")
             print(f"  recovery: {n_rec} file(s), {len(rec_df):,} rows  "
                   "(GraDe-IF dual-source per user's existing pipeline)")
-
-        # ---- aggregate ----
         per_delta = _per_protein_delta(kcat_df)
         per_rec = _per_protein_recovery(rec_df)
-        per_rmsd = _per_protein_rmsd(RMSD_DIR / cfg["rmsd_csv"])
+        per_rmsd = _per_protein_rmsd(rmsd_dir / cfg["rmsd_csv"])
         merged = per_delta.merge(per_rec, on="ProID", how="outer") \
                           .merge(per_rmsd, on="ProID", how="left")
-
         print(f"  proteins: {len(merged):,}  | "
               f"ΔlgKcat mean = {merged['delta_lgKcat'].mean():+.4f}  | "
               f"recovery mean = {merged['recovery'].mean():.4f}  | "
@@ -235,24 +230,102 @@ def main() -> None:
               f"RMSD mean = {merged['Backbone_RMSD'].mean():.3f}")
         per_baseline[name] = merged
 
-    # ---------- pivot to wide table ----------
+    # Pivot to wide table
     master = None
     metric_cols = ["delta_lgKcat", "recovery", "Backbone_RMSD", "Avg_pLDDT", "n_obs"]
     for name, df in per_baseline.items():
         sub = df[["ProID"] + metric_cols].copy()
         sub.columns = ["ProID"] + [f"{name}__{c}" for c in metric_cols]
         master = sub if master is None else master.merge(sub, on="ProID", how="outer")
+    if master is None:
+        return pd.DataFrame()
+    return master.sort_values("ProID").reset_index(drop=True)
 
-    master = master.sort_values("ProID").reset_index(drop=True)
 
-    print("\n[summary]")
-    print(f"  master shape: {master.shape}")
-    print(f"  proteins covered: {master['ProID'].nunique():,}")
+def _build_master_from_score_dir(score_dir: Path) -> pd.DataFrame:
+    """Aggregate per-method outputs from the runs/benchmark_scores/ layout.
 
-    OUT_CSV.parent.mkdir(parents=True, exist_ok=True)
-    master.to_csv(OUT_CSV, index=False)
-    print(f"\n[save] {OUT_CSV}")
+    Expected per method ``<score_dir>/<method>/``:
+      - ``test_mut_substrate_seed*.csv_kcatpred_dlkcat.csv`` per seed
+        (each row: ProID, ProSeq, ProSeq', SMILES, delta_lgKcat, ...)
+      - ``rmsd_plddt.csv`` (per-protein, one seed -- the first benchmark seed
+        per SI §2.7)
+
+    Method names are taken from the subdirectory names.
+    """
+    if not score_dir.is_dir():
+        raise FileNotFoundError(f"--score-dir does not exist: {score_dir}")
+    method_dirs = sorted(p for p in score_dir.iterdir() if p.is_dir())
+    if not method_dirs:
+        raise RuntimeError(f"no method subdirectories under {score_dir}")
+
+    per_method: dict[str, pd.DataFrame] = {}
+    for md in method_dirs:
+        name = md.name
+        kcat_paths = sorted(glob.glob(str(md / "*_kcatpred_dlkcat.csv")))
+        if not kcat_paths:
+            kcat_paths = sorted(glob.glob(str(md / "seed_*/*_kcatpred_dlkcat.csv")))
+        if not kcat_paths:
+            print(f"[load] {name}: no DLKcat outputs; skipping")
+            continue
+        parts = [_normalise_cols(pd.read_csv(p)) for p in kcat_paths]
+        kcat_df = pd.concat(parts, ignore_index=True)
+        per_delta = _per_protein_delta(kcat_df)
+        per_rec   = _per_protein_recovery(kcat_df)
+        rmsd_csv  = md / "rmsd_plddt.csv"
+        per_rmsd  = _per_protein_rmsd(rmsd_csv)
+        merged = per_delta.merge(per_rec, on="ProID", how="outer") \
+                          .merge(per_rmsd, on="ProID", how="left")
+        print(f"[load] {name}: {len(kcat_paths)} kcat file(s), {len(merged):,} proteins")
+        per_method[name] = merged
+
+    master = None
+    metric_cols = ["delta_lgKcat", "recovery", "Backbone_RMSD", "Avg_pLDDT", "n_obs"]
+    for name, df in per_method.items():
+        sub = df[["ProID"] + metric_cols].copy()
+        sub.columns = ["ProID"] + [f"{name}__{c}" for c in metric_cols]
+        master = sub if master is None else master.merge(sub, on="ProID", how="outer")
+    if master is None:
+        return pd.DataFrame()
+    return master.sort_values("ProID").reset_index(drop=True)
+
+
+def _build_arg_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        description="Master per-protein aggregator. Reads per-baseline DLKcat + RMSD/pLDDT "
+                    "outputs and emits one wide CSV indexed by ProID."
+    )
+    src = p.add_mutually_exclusive_group(required=False)
+    src.add_argument("--score-dir", type=Path, default=None,
+                     help="Path to runs/benchmark_scores/ (preferred mode; reads per-method "
+                          "subdirectories produced by scripts/07_score_benchmark.sh)")
+    src.add_argument("--kcat-dir", type=Path, default=DEFAULT_KCAT_DIR,
+                     help="(Legacy mode) directory containing per-baseline DLKcat output "
+                          "subdirectories with the historical filename patterns")
+    p.add_argument("--rmsd-dir", type=Path, default=DEFAULT_RMSD_DIR,
+                   help="(Legacy mode) directory containing per-baseline rmsd_plddt CSVs")
+    p.add_argument("--output", type=Path, default=DEFAULT_OUT_CSV,
+                   help=f"output master CSV path (default: {DEFAULT_OUT_CSV})")
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _build_arg_parser().parse_args(argv)
+    if args.score_dir is not None:
+        print(f"[mode] score-dir layout: {args.score_dir}")
+        master = _build_master_from_score_dir(args.score_dir)
+    else:
+        print(f"[mode] legacy BASELINES layout: kcat={args.kcat_dir}, rmsd={args.rmsd_dir}")
+        master = _build_master_from_baselines(args.kcat_dir, args.rmsd_dir)
+    if master.empty:
+        print("[error] no data aggregated -- check the input paths")
+        return 1
+    print(f"\n[summary] master shape: {master.shape}, proteins: {master['ProID'].nunique():,}")
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    master.to_csv(args.output, index=False)
+    print(f"[save] {args.output}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

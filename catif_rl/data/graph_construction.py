@@ -138,28 +138,78 @@ def pdb_to_sample_data(pdb_path: str, normalize_path: str | None = None):
 
 
 
-if __name__ == '__main__':
+def build_dir(input_dir: Path, output_dir: Path,
+              normalize_path: str | None = None,
+              skip_existing: bool = True) -> tuple[int, int, list[str]]:
+    """Process every .pdb under ``input_dir`` into a .pt graph under ``output_dir``.
 
-    # generate a batch of protein graph
-    error_pdb = []
-    for key in ['brenda_seq_pdb']:
-        pdb_dir =f'dataset/raw/{key}/'
-        save_dir = f'dataset/process/{key}/'
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-        filename_list = [i for i in os.listdir(pdb_dir) if i.endswith('.pdb')]
-        for filename in tqdm(filename_list):
-            if os.path.exists(save_dir+filename.replace('.pdb','.pt')):
-                pass
-            else:
-                try:
-                    graph = pdb2graph(pdb_dir+filename,'dataset_src/mean_attr.pt')
-                    if graph:
-                        torch.save(graph,save_dir+filename.replace('.pdb','.pt'))
-                    else:
-                        error_pdb.append(filename)
-                except (IndexError, KeyError):
-                    error_pdb.append(filename)
+    Returns ``(n_ok, n_skipped_existing, error_filenames)``.
+    """
+    input_dir  = Path(input_dir)
+    output_dir = Path(output_dir)
+    if not input_dir.is_dir():
+        raise FileNotFoundError(f"input directory does not exist: {input_dir}")
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    print(len(error_pdb))
-    print(error_pdb)
+    pdb_files = sorted(f.name for f in input_dir.iterdir() if f.suffix.lower() == ".pdb")
+    if not pdb_files:
+        print(f"[graph_construction] no .pdb files under {input_dir}; nothing to do")
+        return 0, 0, []
+
+    print(f"[graph_construction] {input_dir} -> {output_dir}  ({len(pdb_files)} PDB files)")
+    error_pdb: list[str] = []
+    n_ok = 0
+    n_skipped = 0
+    for filename in tqdm(pdb_files):
+        in_path  = input_dir / filename
+        out_path = output_dir / (filename[:-4] + ".pt")
+        if skip_existing and out_path.exists():
+            n_skipped += 1
+            continue
+        try:
+            graph = pdb2graph(str(in_path), normalize_path=normalize_path)
+        except (IndexError, KeyError):
+            error_pdb.append(filename)
+            continue
+        except Exception as e:                                          # noqa: BLE001
+            tqdm.write(f"[ERROR] {filename}: {e!s}")
+            error_pdb.append(filename)
+            continue
+        if graph is None:
+            error_pdb.append(filename)
+            continue
+        torch.save(graph, str(out_path))
+        n_ok += 1
+    return n_ok, n_skipped, error_pdb
+
+
+def _build_arg_parser() -> "argparse.ArgumentParser":
+    import argparse
+    p = argparse.ArgumentParser(
+        description="Convert a directory of PDB files into PyG .pt graph tensors "
+                    "compatible with catif_rl.data.large_dataset.Cath."
+    )
+    p.add_argument("--input-dir",  type=Path, required=True,
+                   help="directory containing source .pdb files")
+    p.add_argument("--output-dir", type=Path, required=True,
+                   help="directory to write .pt files (created if missing)")
+    p.add_argument("--normalize-path", type=str, default=None,
+                   help="optional path to mean_attr.pt; defaults to the bundled "
+                        "catif_rl/data/assets/mean_attr.pt")
+    p.add_argument("--rebuild", action="store_true",
+                   help="if set, overwrite existing .pt files (default: skip)")
+    return p
+
+
+if __name__ == "__main__":
+    args = _build_arg_parser().parse_args()
+    n_ok, n_skipped, errors = build_dir(
+        args.input_dir,
+        args.output_dir,
+        normalize_path=args.normalize_path,
+        skip_existing=(not args.rebuild),
+    )
+    print(f"[graph_construction] wrote {n_ok} new .pt; skipped {n_skipped} existing; "
+          f"{len(errors)} failures")
+    if errors:
+        print(f"[graph_construction] first 20 failures: {errors[:20]}")

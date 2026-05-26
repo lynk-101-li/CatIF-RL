@@ -21,10 +21,27 @@ jobs:
       - name: Install lightweight dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyyaml
+          # numpy/pandas/scipy are needed by the eval modules' import side;
+          # they are small enough to live in the smoke CI without pulling in
+          # the heavy torch / torch_geometric stack.
+          pip install pyyaml numpy pandas scipy biopython tabulate
 
+      # ----- Static syntax / config validation ------------------------------
       - name: Compile every Python source file
         run: python -m compileall -q catif_rl tests
+
+      - name: Shell syntax check (bash -n) for every script
+        run: |
+          fail=0
+          for s in scripts/*.sh; do
+            if ! bash -n "$s"; then
+              echo "FAIL  bash -n $s"
+              fail=1
+            else
+              echo "OK    bash -n $s"
+            fi
+          done
+          exit "$fail"
 
       - name: Validate every config YAML
         run: |
@@ -51,3 +68,173 @@ jobs:
           assert isinstance(mod.__version__, str)
           print('catif_rl version:', mod.__version__)
           "
+
+      # ----- CLI smoke: every entry-point module exposes a working --help ---
+      - name: python -m <module> --help on every CLI entry point
+        run: |
+          # Modules whose argparse should construct cleanly without heavy
+          # deps (torch, torch_geometric, Bio.PDB). For modules that pull
+          # heavy deps at import time we accept ModuleNotFoundError, but we
+          # do NOT accept argparse construction errors or syntax errors.
+          set -e
+          OK=()
+          DEPMISS=()
+          BAD=()
+          MODS=(
+            catif_rl.reward.ensemble_rl
+            catif_rl.reward.ensemble_gdc
+            catif_rl.reward.substrate_match
+            catif_rl.reward.structural_filter
+            catif_rl.reward.gdc
+            catif_rl.evaluation.structural
+            catif_rl.evaluation.recovery
+            catif_rl.evaluation.build_master
+            catif_rl.evaluation.statistics
+            catif_rl.data.esmfold_backbones
+          )
+          for m in "${MODS[@]}"; do
+            out=$(python -m "$m" --help 2>&1 || true)
+            if echo "$out" | grep -q '^usage:'; then
+              OK+=("$m")
+            elif echo "$out" | grep -qE 'ModuleNotFoundError|ImportError'; then
+              DEPMISS+=("$m")
+            else
+              BAD+=("$m: $out")
+            fi
+          done
+          echo "OK (--help works):    ${OK[@]}"
+          echo "DEPMISS (env issue):  ${DEPMISS[@]}"
+          if [ "${#BAD[@]}" -gt 0 ]; then
+            echo "BAD (real defect):"
+            printf '  %s\n' "${BAD[@]}"
+            exit 1
+          fi
+
+      # ----- Cross-check: every --flag passed in scripts/*.sh exists in the
+      #       target module's argparse ---------------------------------------
+      - name: Shell-vs-argparse flag audit
+        run: |
+          python <<'PY'
+          """Lightweight flag audit: for every `python -m catif_rl.X.Y` invocation
+             in scripts/*.sh, collect the --flags it passes; for the same module,
+             scan its source for `add_argument('--name'` calls and confirm each
+             shell flag has a matching declaration.
+
+             Heavy deps (torch etc.) are NOT imported -- we just AST-parse the
+             module's source.
+          """
+          import ast, re, sys
+          from pathlib import Path
+
+          # 1. Collect (module, [flags]) tuples from scripts/*.sh
+          INVOCATION = re.compile(r"python\s+(?:-u\s+)?-m\s+(catif_rl\.[A-Za-z_.]+)")
+          FLAG       = re.compile(r"(?<!\\)--[A-Za-z][A-Za-z0-9_-]*")
+
+          calls = []  # list of (script_path, module, [flags])
+          for sh in sorted(Path("scripts").glob("*.sh")):
+              text = sh.read_text()
+              # Walk line by line so we can track a `python -m X ... \` continuation block.
+              lines = text.splitlines()
+              i = 0
+              while i < len(lines):
+                  m = INVOCATION.search(lines[i])
+                  if not m:
+                      i += 1; continue
+                  module = m.group(1)
+                  # Collect this line + all following \-continued lines
+                  block = [lines[i]]
+                  j = i
+                  while j < len(lines) and lines[j].rstrip().endswith("\\"):
+                      j += 1
+                      if j < len(lines):
+                          block.append(lines[j])
+                  text_block = " ".join(block)
+                  flags = FLAG.findall(text_block)
+                  calls.append((str(sh), module, flags))
+                  i = j + 1
+
+          # 2. For each module, AST-parse its source and collect declared flags
+          def collect_flags_in_module(mod: str) -> set[str]:
+              p = Path(mod.replace(".", "/") + ".py")
+              if not p.exists():
+                  return set()
+              flags: set[str] = set()
+              tree = ast.parse(p.read_text())
+              for node in ast.walk(tree):
+                  if (isinstance(node, ast.Call)
+                          and isinstance(node.func, ast.Attribute)
+                          and node.func.attr == "add_argument"):
+                      for arg in node.args:
+                          if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                              v = arg.value
+                              if v.startswith("--"):
+                                  flags.add(v)
+                              elif v.startswith("-") and len(v) <= 3:
+                                  # short alias, ignore for this audit
+                                  pass
+              return flags
+
+          # 3. Diff and report
+          any_missing = False
+          for sh, mod, flags in calls:
+              declared = collect_flags_in_module(mod)
+              missing = [f for f in flags if f not in declared and f != "--help"]
+              if not declared:
+                  # module has no argparse at all; only fail if shell passed any flags
+                  if flags and flags != ["--help"]:
+                      print(f"FAIL {sh}: {mod} has no argparse but receives {flags}")
+                      any_missing = True
+                  else:
+                      print(f"skip {sh}: {mod} has no argparse and shell passes no flags")
+                  continue
+              if missing:
+                  print(f"FAIL {sh}: {mod} missing flags {missing}; declared = {sorted(declared)}")
+                  any_missing = True
+              else:
+                  print(f"OK   {sh}: {mod} ({len(flags)} flag(s))")
+
+          sys.exit(1 if any_missing else 0)
+          PY
+
+      # ----- Manuscript-critical numerical claims ---------------------------
+      - name: Verify CATH manifest counts match the paper
+        run: |
+          python <<'PY'
+          import json, sys
+          d = json.load(open('catif_rl/data/assets/chain_set_splits.json'))
+          got_train, got_valid = len(d['train']), len(d['validation'])
+          ok = (got_train == 18021 and got_valid == 608)
+          print(f"train={got_train} (expected 18021), validation={got_valid} (expected 608)")
+          sys.exit(0 if ok else 1)
+          PY
+
+      # ----- Forbid NotImplementedError in shipped CLIs ---------------------
+      - name: Forbid NotImplementedError in catif_rl/training and catif_rl/data CLIs
+        run: |
+          python <<'PY'
+          import sys, ast
+          from pathlib import Path
+          # Modules that a JCIM reviewer can plausibly invoke; they must not
+          # raise NotImplementedError at the top level of their main path.
+          MODS = [
+              "catif_rl/training/train_supervised.py",
+              "catif_rl/data/graph_construction.py",
+              "catif_rl/data/splits.py",
+              "catif_rl/reward/gdc.py",
+              "catif_rl/reward/structural_filter.py",
+          ]
+          fail = False
+          for m in MODS:
+              src = Path(m).read_text()
+              tree = ast.parse(src)
+              for node in ast.walk(tree):
+                  if (isinstance(node, ast.Raise) and node.exc and
+                      isinstance(node.exc, ast.Call) and
+                      isinstance(node.exc.func, ast.Name) and
+                      node.exc.func.id == "NotImplementedError"):
+                      print(f"FAIL {m}:{node.lineno} raises NotImplementedError")
+                      fail = True
+              else:
+                  print(f"OK   {m}")
+          sys.exit(1 if fail else 0)
+          PY

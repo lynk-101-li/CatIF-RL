@@ -47,10 +47,20 @@ def predict(
     repo_root: Optional[Path] = None,
     mode: Literal["benchmark", "rl"] = "benchmark",
     conda_env: str = _CONDA_ENV,
+    output_dir: Optional[Path] = None,
 ) -> Path:
     """Run DLKcat on a (ProID, ProSeq, SMILES) CSV.
 
     Returns the path to the generated ``*_kcatpred_dlkcat.csv``.
+
+    By default the upstream entry script writes its output into
+    ``external/DLKcat5/DeeplearningApproach/Code/example/output_data/``,
+    which is outside the per-round / per-benchmark working directory that
+    downstream scoring (``catif_rl.reward.gdc`` and
+    ``catif_rl.reward.ensemble_rl``) reads from. To bridge that gap, when
+    ``output_dir`` is supplied the wrapper additionally copies the output
+    to ``<output_dir>/dlkcat_pred.csv`` (the canonical filename consumed
+    downstream) and returns *that* path.
     """
 
     if shutil.which("conda") is None:
@@ -60,8 +70,8 @@ def predict(
     example_dir = repo / "DeeplearningApproach" / "Code" / "example"
     script = "run_rl_input.py" if mode == "rl" else "run_test_input.py"
 
-    input_csv = input_csv.resolve()
-    output_csv = example_dir / "output_data" / (input_csv.stem + "_kcatpred_dlkcat.csv")
+    input_csv = Path(input_csv).resolve()
+    upstream_output = example_dir / "output_data" / (input_csv.stem + "_kcatpred_dlkcat.csv")
 
     cmd = (
         "source $(conda info --base)/etc/profile.d/conda.sh && "
@@ -70,4 +80,11 @@ def predict(
         "python " + script + " " + str(input_csv)
     )
     subprocess.run(["bash", "-c", cmd], check=True)
-    return output_csv
+
+    if output_dir is not None:
+        output_dir = Path(output_dir).resolve()
+        output_dir.mkdir(parents=True, exist_ok=True)
+        canonical = output_dir / "dlkcat_pred.csv"
+        shutil.copyfile(upstream_output, canonical)
+        return canonical
+    return upstream_output

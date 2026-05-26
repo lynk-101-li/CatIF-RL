@@ -28,14 +28,19 @@ for method_dir in "$BENCH_DIR"/*/; do
 
   # (1) substrate match + DLKcat scoring for every seed.
   for seed in "${BENCHMARK_SEEDS[@]}"; do
+    seed_score_dir="$method_score_dir/seed_${seed}"
+    mkdir -p "$seed_score_dir"
+
     activate_env catif
     python -m catif_rl.reward.substrate_match \
       "$TEMPLATE_CSV" \
       "$method_dir/seed_${seed}" \
-      "$method_score_dir/test_mut_substrate_seed${seed}.csv"
+      "$seed_score_dir/test_mut_substrate_seed${seed}.csv"
 
+    # The wrapper copies the upstream output to $seed_score_dir/dlkcat_pred.csv,
+    # which is the canonical filename build_master --score-dir mode expects.
     activate_env dlkcat
-    python -c "from catif_rl.reward.predictors import dlkcat; dlkcat.predict('$method_score_dir/test_mut_substrate_seed${seed}.csv', mode='benchmark')"
+    python -c "from catif_rl.reward.predictors import dlkcat; dlkcat.predict('$seed_score_dir/test_mut_substrate_seed${seed}.csv', mode='benchmark', output_dir='$seed_score_dir')"
   done
 
   # (2) Structural evaluation on the first benchmark seed (per SI §2.7).
@@ -56,11 +61,12 @@ done
 activate_env catif
 python -m catif_rl.evaluation.build_master \
   --score-dir "$SCORE_DIR" \
-  --output "$SCORE_DIR/master_per_protein.csv"
+  --output    "$SCORE_DIR/master_per_protein.csv"
 
-# (4) Compute Tables S7 / S8 / S9 (CI + paired Wilcoxon + threshold sensitivity).
+# (4) Compute Tables S7 / S8 / S9 / S10 (CI + paired Wilcoxon + BH-FDR + SR@delta).
+mkdir -p "$SCORE_DIR/tables"
 python -m catif_rl.evaluation.statistics \
-  --master "$SCORE_DIR/master_per_protein.csv" \
+  --master     "$SCORE_DIR/master_per_protein.csv" \
   --output-dir "$SCORE_DIR/tables"
 
 echo "[score_benchmark] Scores + statistics under: $SCORE_DIR"
