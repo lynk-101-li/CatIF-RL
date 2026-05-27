@@ -208,6 +208,10 @@ jobs:
           sys.exit(0 if ok else 1)
           PY
 
+      # ----- CSV<->FASTA + ref-stem-regex contract (external-review round 2 B2) -------
+      - name: CSV->FASTA + structural ref-stem-regex contract
+        run: PYTHONPATH=. python tests/test_csv_to_fasta.py
+
       # ----- Frozen-normalizer round-trip (external-review round 2 M1) ----------------
       - name: GDC normalizer round-trip
         run: PYTHONPATH=. python tests/test_normalizer_roundtrip.py

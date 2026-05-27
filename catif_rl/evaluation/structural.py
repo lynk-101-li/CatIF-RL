@@ -37,7 +37,10 @@ All three metrics, used during the GDC structural gate::
 
 import os, re, csv, argparse
 import numpy as np
-from Bio.PDB import PDBParser, Superimposer
+
+# Bio.PDB is imported lazily inside the functions that need it, so the pure
+# helpers (build_ref_path, recovery_rate, etc.) are importable in lightweight
+# environments / unit tests that don't have biopython installed.
 
 AA3_TO_1 = {
     "ALA":"A","ARG":"R","ASN":"N","ASP":"D","CYS":"C",
@@ -49,6 +52,7 @@ AA3_TO_1 = {
 OUT_COLS = ["ProID","ProSeq","ProSeq'","Recovery_rate","CA_RMSD","Backbone_RMSD","Avg_pLDDT"]
 
 def get_sequence(pdb_file: str) -> str:
+    from Bio.PDB import PDBParser
     parser = PDBParser(QUIET=True)
     struct = parser.get_structure("tmp", pdb_file)
     seq = []
@@ -60,6 +64,7 @@ def get_sequence(pdb_file: str) -> str:
     return "".join(seq)
 
 def align_proteins_and_calculate_rmsd(ref_pdb: str, pred_pdb: str):
+    from Bio.PDB import PDBParser, Superimposer
     parser = PDBParser(QUIET=True)
     s1 = parser.get_structure("ref", ref_pdb)
     s2 = parser.get_structure("pred", pred_pdb)
@@ -81,6 +86,7 @@ def align_proteins_and_calculate_rmsd(ref_pdb: str, pred_pdb: str):
     return ca_rmsd, bb_rmsd
 
 def average_plddt(pdb_file: str) -> float:
+    from Bio.PDB import PDBParser
     parser = PDBParser(QUIET=True)
     model = parser.get_structure("pred", pdb_file)
     bf = [a.get_bfactor() for a in model.get_atoms()]
@@ -104,9 +110,36 @@ def ensure_parent_dir(path: str):
     if parent:
         os.makedirs(parent, exist_ok=True)
 
-def build_ref_path(ref_dir: str, pred_fname: str, ref_pattern: str) -> str:
+def build_ref_path(ref_dir: str, pred_fname: str, ref_pattern: str,
+                   ref_stem_regex: "re.Pattern | None" = None) -> str:
+    """Resolve the reference PDB path matching ``pred_fname``.
+
+    With the default ``--ref-pattern "{fname}"``, ref name = pred fname.
+    With ``--ref-pattern "{ref_stem}.pdb"`` AND ``--ref-stem-regex <regex>``,
+    the regex is applied to the pred stem and group(1) is substituted as
+    ``ref_stem`` -- supporting layouts like
+
+        pred dir:  sequence_42_var0.pdb  sequence_42_var1.pdb  sequence_7_var0.pdb
+        ref  dir:  sequence_42.pdb       sequence_7.pdb
+        --ref-pattern    "{ref_stem}.pdb"
+        --ref-stem-regex "^(sequence_\\d+)"
+
+    which is what catif_rl.data.csv_to_fasta + esmfold_backbones produce
+    for GDC refolds.
+    """
     stem = os.path.splitext(pred_fname)[0]
-    ref_name = ref_pattern.format(fname=pred_fname, stem=stem)
+    fmt_kwargs = {"fname": pred_fname, "stem": stem}
+    if ref_stem_regex is not None:
+        m = ref_stem_regex.search(stem)
+        if not m:
+            # Fall back to the raw stem; build_ref_path can still produce a
+            # legal-looking path even if it doesn't match an existing file --
+            # caller treats missing ref as [MISS].
+            fmt_kwargs["ref_stem"] = stem
+        else:
+            # Use the first capture group if present, else the whole match.
+            fmt_kwargs["ref_stem"] = m.group(1) if m.lastindex else m.group(0)
+    ref_name = ref_pattern.format(**fmt_kwargs)
     return os.path.join(ref_dir, ref_name)
 
 def parse_args():
@@ -114,7 +147,15 @@ def parse_args():
     ap.add_argument("--ref-dir",  required=True, help="reference PDB directory (e.g. data/raw/test)")
     ap.add_argument("--pred-dir", required=True, help="predicted PDB directory (e.g. runs/benchmark_scores/<method>/refold_seedXXXX)")
     ap.add_argument("--csv-out",  required=True, help="output CSV path (e.g. runs/benchmark_scores/<method>/rmsd_plddt.csv)")
-    ap.add_argument("--ref-pattern", default="{fname}", help='reference filename template; default is matching basename, others such as "{stem}.pdb" supported')
+    ap.add_argument("--ref-pattern", default="{fname}",
+                    help='reference filename template; default is matching basename. '
+                         'Supports {fname}, {stem}, and (if --ref-stem-regex is given) {ref_stem}. '
+                         'Example: --ref-pattern "{ref_stem}.pdb" --ref-stem-regex "^(sequence_\\d+)"')
+    ap.add_argument("--ref-stem-regex", default=None,
+                    help="optional Python regex applied to the pred stem; the first capture "
+                         "group (or full match) becomes the {ref_stem} substitution in "
+                         "--ref-pattern. Used for GDC refolds where pred stems like "
+                         "'sequence_42_var3' need to match ref 'sequence_42.pdb'.")
     ap.add_argument(
         "--metrics",
         default="rmsd,plddt",
@@ -125,6 +166,7 @@ def parse_args():
 def main():
     args = parse_args()
     ref_dir, pred_dir, csv_out, ref_pattern = args.ref_dir, args.pred_dir, args.csv_out, args.ref_pattern
+    ref_stem_regex = re.compile(args.ref_stem_regex) if args.ref_stem_regex else None
     metrics = {m.strip().lower() for m in args.metrics.split(",") if m.strip()}
 
     do_rmsd = "rmsd" in metrics
@@ -142,7 +184,7 @@ def main():
             continue
 
         pred_p = os.path.join(pred_dir, fname)
-        ref_p  = build_ref_path(ref_dir, fname, ref_pattern)
+        ref_p  = build_ref_path(ref_dir, fname, ref_pattern, ref_stem_regex)
 
         if not os.path.exists(ref_p):
             print(f"[MISS] reference structure missing: {os.path.basename(ref_p)}  (pred={fname})")

@@ -46,12 +46,18 @@ python -m catif_rl.data.esmfold_backbones \
   --fasta      "$CANDIDATES" \
   --output-dir "$REFOLD_DIR"
 
+# GDC refold PDBs are named sequence_<ProID>_var<idx>.pdb (one per
+# (ProID, ProSeq') unique row from gdc_candidates.csv, deduped by
+# catif_rl.data.csv_to_fasta). Map them back to the ProID-keyed WT refs
+# under data/raw/enzymeif/train_and_validation/sequence_<ProID>.pdb.
 activate_env catif
 python -m catif_rl.evaluation.structural \
-  --ref-dir  "$DATA_DIR/raw/enzymeif/train_and_validation" \
-  --pred-dir "$REFOLD_DIR" \
-  --csv-out  "$STRUCTURAL_METRICS" \
-  --metrics  rmsd,plddt
+  --ref-dir         "$DATA_DIR/raw/enzymeif/train_and_validation" \
+  --pred-dir        "$REFOLD_DIR" \
+  --csv-out         "$STRUCTURAL_METRICS" \
+  --ref-pattern     "{ref_stem}.pdb" \
+  --ref-stem-regex  "^(sequence_[0-9]+)" \
+  --metrics         rmsd,plddt
 
 # Stage 3: score with each predictor (DLKcat, UniKP, CataPro). The wrappers
 # write to $PRED_DIR by default (see catif_rl.reward.predictors.*); a
