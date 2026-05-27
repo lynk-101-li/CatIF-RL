@@ -65,6 +65,21 @@ data/
 │   └── gdc_variants_6034.csv      # 6,034 rows; columns: Group, ProID, ProSeq', mean3.
 │                                  # Each row corresponds to one PDB under data/raw/catif/.
 │
+├── benchmark_baselines/           # archived per-seed FASTA outputs of the
+│   │                              # five external inverse-folding baselines
+│   │                              # (manuscript Table 1; see "Benchmark
+│   │                              # baseline FASTA archives" below).
+│   ├── proteinmpnn/
+│   │   ├── seed_1111/  ...        # 1,423 sequence_<ProID>.fa per seed
+│   │   ├── seed_2222/  ...
+│   │   ├── seed_3333/  ...
+│   │   ├── seed_4444/  ...
+│   │   └── seed_5555/  ...
+│   ├── esmif/         (same 5x1,423 layout)
+│   ├── ligandmpnn/    (same)
+│   ├── pifold/        (same)
+│   └── abacust/       (same)
+│
 └── reward/                        # in Zenodo deposit; offline RL inner-loop reward
                                    # signals (manuscript §2.5)
     ├── round1_reward_data.csv     # CatIF       -> CatIF-RL Round-1
@@ -124,6 +139,46 @@ wget https://zenodo.org/records/20357063/files/catif_rl_data_v0.1.0.tar.gz.sha25
 shasum -a 256 -c catif_rl_data_v0.1.0.tar.gz.sha256
 tar -xzf catif_rl_data_v0.1.0.tar.gz       # populates  data/
 ```
+
+### Benchmark baseline FASTA archives
+
+The five external inverse-folding baselines (ProteinMPNN, ESM-IF,
+LigandMPNN, PiFold, ABACUS-T) are NOT re-sampled by this repository: each
+upstream tool requires its own conda environment and model weights, and the
+published sample is a frozen artefact rather than a stochastic re-sample.
+Instead, the exact per-seed FASTA outputs that produced the manuscript
+Table 1 numbers are shipped via Zenodo as a separate tarball.
+
+Layout per the manuscript (5 seeds × 5 methods × 1,423 enzymes = 35,575 files,
+~17.8 GB raw, ~5–7 GB compressed):
+
+```
+data/benchmark_baselines/
+├── proteinmpnn/seed_{1111,2222,3333,4444,5555}/sequence_<ProID>.fa
+├── esmif/seed_*/                  sequence_<ProID>.fasta
+├── ligandmpnn/seed_*/             sequence_<ProID>.fa
+├── pifold/seed_*/                 sequence_<ProID>.fa
+└── abacust/seed_*/                sequence_<ProID>.fa
+```
+
+Download instructions (placeholders until the v0.1.0 baseline tarball is
+uploaded; the staging script `scripts/admin/stage_baseline_archives.sh`
+produces the exact artefact and prints its sha256):
+
+```bash
+# Replace CATIF_RL_BASELINES_TARBALL_URL with the Zenodo URL once available
+wget CATIF_RL_BASELINES_TARBALL_URL                 # ~5-7 GB
+wget CATIF_RL_BASELINES_TARBALL_URL.sha256
+shasum -a 256 -c catif_rl_baselines_v0.1.0.tar.gz.sha256
+mkdir -p data/benchmark_baselines
+tar -xzf catif_rl_baselines_v0.1.0.tar.gz -C data/benchmark_baselines/
+```
+
+`scripts/06_sample_benchmark.sh` symlinks each `data/benchmark_baselines/<method>/seed_<NNNN>/`
+into the run output dir for the corresponding (method, seed); the in-repo
+methods (GraDe-IF / EnzymeIF / CatIF / CatIF-RL R1–R3) are re-sampled live
+as before. A non-staged archive aborts that script with a pointer back to
+this section.
 
 **Three separate training cohorts.** EnzymeIF and CatIF do **not** share
 their training data:

@@ -216,6 +216,10 @@ jobs:
       - name: EnzymeIF/CATH splitter reproducibility + count-assert
         run: PYTHONPATH=. python tests/test_splits.py
 
+      # ----- 06 archive-aware branch contract (external-review round 2 B5) ------------
+      - name: 06_sample_benchmark.sh archive-aware branch
+        run: bash tests/test_baseline_archive_wiring.sh
+
       # ----- Frozen-normalizer round-trip (external-review round 2 M1) ----------------
       - name: GDC normalizer round-trip
         run: PYTHONPATH=. python tests/test_normalizer_roundtrip.py

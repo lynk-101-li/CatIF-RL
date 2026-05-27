@@ -47,6 +47,7 @@ data/brenda/
 data/enzyme_train_and_valid_dataset/
 data/reward/
 data/cath40*/
+data/benchmark_baselines/
 *.pdb
 !case_study/**/*.pdb
 !case_study/**/native.pdb
