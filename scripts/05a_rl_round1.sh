@@ -40,7 +40,7 @@ python -c "from catif_rl.reward.predictors import dlkcat; dlkcat.predict('$RAW_S
 activate_env unikp
 python -c "from catif_rl.reward.predictors import unikp; unikp.predict('$RAW_SAMPLE', mode='rl', output_dir='$ROUND_DIR')"
 activate_env catapro
-python -c "from catif_rl.reward.predictors import catapro; catapro.predict('$RAW_SAMPLE', mode='rl', rl_round_tag='round1', rl_subset_tag='catif_init', output_dir='$ROUND_DIR')"
+python -c "from catif_rl.reward.predictors import catapro; catapro.predict('$RAW_SAMPLE', mode='rl', output_dir='$ROUND_DIR')"
 
 # Stage 3: normalise and ensemble.
 activate_env catif

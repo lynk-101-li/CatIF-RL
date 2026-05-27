@@ -26,7 +26,7 @@ normalization) to produce the activity reward used during GDC and GRPO.
 |-----------|----------|-----------|-----------------|-------|
 | DLKcat | <https://github.com/SysBioChalmers/DLKcat> | `dlkcat` | `DeeplearningApproach/Code/example/{run_test_input,run_rl_input}.py` | Also doubles as the per-protein evaluator on the held-out test set. |
 | UniKP | <https://github.com/Luo-SynBioLab/UniKP> | `unikp` | `{run_prediction,run_rl_pred}.py` | ProtT5 + SMILES transformer + ExtraTrees regressor. |
-| CataPro | <https://github.com/zchwang/CataPro> | `catapro` | `inference/predict.py`, invoked via `run_catapro_{test,rl}.sh` | Dual-branch deep regressor. |
+| CataPro | <https://github.com/zchwang/CataPro> | `catapro` | `inference/predict.py`, driven by `catif_rl/reward/predictors/_run_catapro.sh` (this repo's shim, called from `catapro.py`) | Dual-branch deep regressor. The upstream `run_catapro_{test,rl}.sh` example shells are not used: their hard-coded paths would break public reproduction, so the shim invokes `predict.py` directly with `--input` / `--prefix` and stays in sync with `dlkcat.py` and `unikp.py`. |
 
 Each predictor is wrapped by a thin subprocess interface under
 `catif_rl/reward/predictors/`.
