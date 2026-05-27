@@ -762,7 +762,21 @@ if __name__ == "__main__" :
 
     parser.add_argument('--seed', type=int, default=-1,
                     help='Random seed; set >=0 to enable deterministic seeding')
-                    
+
+    # ---- Trainer-loop knobs (M4: surfaced as CLI flags so SI Tables S1/S2 can
+    # be reproduced without editing the Trianer defaults inline) -------------
+    parser.add_argument('--epochs', type=int, default=-1,
+                    help=('Number of epochs to train for. If >= 0, this overrides '
+                          '--train_num_steps via epochs * (len(train_dataset) // batch_size). '
+                          'Default -1 means: use --train_num_steps directly.'))
+    parser.add_argument('--train_num_steps', type=int, default=200000,
+                    help='Total gradient-update steps if --epochs is not set (default 200000).')
+    parser.add_argument('--save_every_n_epochs', type=int, default=5,
+                    help='Snapshot the EMA + model every N epochs (default 5).')
+    parser.add_argument('--output_dir', type=str, default='./diffusion/results',
+                    help=('Where to write {weight/, figure/} subdirs and the periodic '
+                          '*.pt checkpoints (default ./diffusion/results).'))
+
     args = parser.parse_args()
 
     config = vars(args)
@@ -797,13 +811,24 @@ if __name__ == "__main__" :
 
     model = EGNN_NET(input_feat_dim=input_feat_dim,hidden_channels=config['hidden_dim'],edge_attr_dim=edge_attr_dim,dropout=config['drop_out'],n_layers=config['depth'],update_edge = config['update_edge'],embedding=config['embedding'],embedding_dim=config['embedding_dim'],norm_feat=config['norm_feat'],embed_ss=config['embed_ss'])
     diffusion_model = GraDe_IF(model,timesteps=config['timesteps'],objective=config['objective'],config=config)
+    # Resolve the M4 trainer-loop knobs. If --epochs >= 0, convert to steps
+    # using the actual train-set size; otherwise honour --train_num_steps.
+    if config.get('epochs', -1) >= 0:
+        steps_per_epoch = max(1, len(train_dataset) // config['batch_size'])
+        train_num_steps = config['epochs'] * steps_per_epoch
+    else:
+        train_num_steps = config.get('train_num_steps', 200000)
+
     trainer  = Trianer(config,
                         diffusion_model,
-                        train_dataset, 
+                        train_dataset,
                         val_dataset,
                         test_dataset,
                         train_batch_size = config['batch_size'],
                         train_lr=config['lr'],
                         weight_decay = config['wd'],
-                        ema_decay= config['ema_decay'])
+                        ema_decay= config['ema_decay'],
+                        train_num_steps = train_num_steps,
+                        save_and_sample_every = config.get('save_every_n_epochs', 5),
+                        results_folder = config.get('output_dir', './diffusion/results'))
     trainer.train()

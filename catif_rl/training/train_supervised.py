@@ -28,6 +28,7 @@ Mapping from YAML fields to gradeif_app flags follows SI Tables S1 / S2:
     YAML field                         -> gradeif_app flag
     ---------------------------------------------------------
     run.name + run.date_tag            -> --Date '<name>_<date>'
+    run.output_dir                     -> --output_dir
     dataset.train_split                -> --train_dir
     dataset.valid_split                -> --val_dir
     architecture.depth                 -> --depth
@@ -46,6 +47,17 @@ Mapping from YAML fields to gradeif_app flags follows SI Tables S1 / S2:
     regularization.ema_decay           -> --ema_decay
     training.batch_size                -> --batch_size
     training.seed                      -> --seed
+    training.max_epochs                -> --epochs
+    training.save_every_n_epochs       -> --save_every_n_epochs
+
+CLI overrides
+-------------
+
+``--epochs`` and ``--output-dir`` can be passed alongside ``--config``
+to override the YAML values without editing the file (useful for the
+shell pipeline and for quick smoke runs). Anything passed on the CLI
+wins over the YAML; anything missing from both falls back to
+``gradeif_app``'s built-in defaults.
 """
 
 from __future__ import annotations
@@ -88,10 +100,12 @@ def _config_to_argv(config: dict) -> list[str]:
 
     argv: list[str] = []
 
-    # Run identification
+    # Run identification + output directory
     name = run.get("name", "supervised")
     date_tag = run.get("date_tag", "")
     argv += ["--Date", f"{name}_{date_tag}" if date_tag else name]
+    if "output_dir" in run:
+        argv += ["--output_dir", str(run["output_dir"])]
 
     # Data paths (gradeif_app appends a trailing slash internally, so
     # normalise here for consistency).
@@ -149,6 +163,10 @@ def _config_to_argv(config: dict) -> list[str]:
         argv += ["--batch_size", str(training["batch_size"])]
     if "seed" in training:
         argv += ["--seed", str(training["seed"])]
+    if "max_epochs" in training:
+        argv += ["--epochs", str(training["max_epochs"])]
+    if "save_every_n_epochs" in training:
+        argv += ["--save_every_n_epochs", str(training["save_every_n_epochs"])]
 
     return argv
 
@@ -173,13 +191,27 @@ def train(config: dict) -> None:
 def _build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--config", type=Path, required=True, help="Path to YAML config")
+    p.add_argument("--config", type=Path, required=True,
+                   help="Path to YAML config (catif_rl/config/{enzymeif,catif}.yaml).")
+    p.add_argument("--epochs", type=int, default=None,
+                   help="Override training.max_epochs from YAML.")
+    p.add_argument("--output-dir", type=Path, default=None,
+                   help="Override run.output_dir from YAML.")
+    p.add_argument("--save-every-n-epochs", type=int, default=None,
+                   help="Override training.save_every_n_epochs from YAML.")
     return p
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _build_arg_parser().parse_args(argv)
     config = load_config(args.config)
+    # CLI overrides win over the YAML for the M4 knobs.
+    if args.epochs is not None:
+        config.setdefault("training", {})["max_epochs"] = args.epochs
+    if args.output_dir is not None:
+        config.setdefault("run", {})["output_dir"] = str(args.output_dir)
+    if args.save_every_n_epochs is not None:
+        config.setdefault("training", {})["save_every_n_epochs"] = args.save_every_n_epochs
     train(config)
     return 0
 
