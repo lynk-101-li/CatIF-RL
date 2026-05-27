@@ -208,6 +208,41 @@ jobs:
           sys.exit(0 if ok else 1)
           PY
 
+      # ----- 2-method x 2-seed benchmark-aggregation fixture ---------------
+      # Catches every regression class behind external-review round 2 blocker B4:
+      #   - DLKcat wrapper / aggregator filename drift
+      #   - method-id <-> display-name registry drift
+      #   - build_master --score-dir glob mismatch
+      - name: build_master smoke fixture (catif x catif_rl_r3, 2 seeds)
+        run: |
+          python <<'PY'
+          import subprocess, sys, tempfile
+          from pathlib import Path
+          import pandas as pd
+
+          fixture = Path("tests/fixtures/benchmark_smoke")
+          assert fixture.is_dir(), f"missing fixture dir: {fixture}"
+
+          with tempfile.TemporaryDirectory() as tmp:
+              master = Path(tmp) / "master.csv"
+              r = subprocess.run(
+                  [sys.executable, "-m", "catif_rl.evaluation.build_master",
+                   "--score-dir", str(fixture), "--output", str(master)],
+                  capture_output=True, text=True,
+              )
+              if r.returncode != 0:
+                  print(r.stdout); print(r.stderr); sys.exit(1)
+              df = pd.read_csv(master)
+              for col in [
+                  "CatIF__delta_lgKcat", "CatIF__Backbone_RMSD",
+                  "CatIF-RL R3__delta_lgKcat", "CatIF-RL R3__Avg_pLDDT",
+              ]:
+                  assert col in df.columns, f"missing column {col!r}"
+              assert df["CatIF-RL R3__delta_lgKcat"].mean() > df["CatIF__delta_lgKcat"].mean(), \
+                  "fixture: CatIF-RL R3 should beat CatIF on average delta_lgKcat"
+              print(f"OK: master has {df.shape}, headline check passed")
+          PY
+
       # ----- Forbid NotImplementedError in shipped CLIs ---------------------
       - name: Forbid NotImplementedError in catif_rl/training and catif_rl/data CLIs
         run: |

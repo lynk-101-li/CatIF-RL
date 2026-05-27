@@ -53,14 +53,13 @@ def predict(
 
     Returns the path to the generated ``*_kcatpred_dlkcat.csv``.
 
-    By default the upstream entry script writes its output into
-    ``external/DLKcat5/DeeplearningApproach/Code/example/output_data/``,
-    which is outside the per-round / per-benchmark working directory that
-    downstream scoring (``catif_rl.reward.gdc`` and
-    ``catif_rl.reward.ensemble_rl``) reads from. To bridge that gap, when
-    ``output_dir`` is supplied the wrapper additionally copies the output
-    to ``<output_dir>/dlkcat_pred.csv`` (the canonical filename consumed
-    downstream) and returns *that* path.
+    The upstream entry script writes its output into
+    ``external/DLKcat5/DeeplearningApproach/Code/example/output_data/<input_stem>_kcatpred_dlkcat.csv``.
+    When ``output_dir`` is supplied, the wrapper additionally copies the
+    output to ``<output_dir>/<input_stem>_kcatpred_dlkcat.csv`` (preserving
+    the manuscript filename convention so downstream globs in
+    ``catif_rl.reward.gdc``, ``catif_rl.reward.ensemble_rl``, and
+    ``catif_rl.evaluation.build_master`` all match) and returns *that* path.
     """
 
     if shutil.which("conda") is None:
@@ -84,7 +83,10 @@ def predict(
     if output_dir is not None:
         output_dir = Path(output_dir).resolve()
         output_dir.mkdir(parents=True, exist_ok=True)
-        canonical = output_dir / "dlkcat_pred.csv"
-        shutil.copyfile(upstream_output, canonical)
-        return canonical
+        # Preserve the manuscript convention: <input_stem>_kcatpred_dlkcat.csv,
+        # one file per (input CSV, seed). build_master --score-dir and
+        # ensemble_rl both glob for *_kcatpred_dlkcat.csv.
+        dst = output_dir / upstream_output.name
+        shutil.copyfile(upstream_output, dst)
+        return dst
     return upstream_output

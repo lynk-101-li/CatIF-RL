@@ -39,6 +39,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from catif_rl.evaluation._method_registry import METHODS as _METHODS_DISPLAY
+
 # ----------------------------------------------------------------------
 # Default paths (overridable via CLI)
 # ----------------------------------------------------------------------
@@ -261,12 +263,17 @@ def _build_master_from_score_dir(score_dir: Path) -> pd.DataFrame:
 
     per_method: dict[str, pd.DataFrame] = {}
     for md in method_dirs:
-        name = md.name
+        method_id = md.name
+        # Translate filesystem-safe id -> manuscript display name (see
+        # catif_rl.evaluation._method_registry). Unknown ids pass through.
+        display = _METHODS_DISPLAY.get(method_id, method_id)
+        # Manuscript filename convention is <input_stem>_kcatpred_dlkcat.csv,
+        # one file per seed, possibly nested under seed_<N>/ subdirectories.
         kcat_paths = sorted(glob.glob(str(md / "*_kcatpred_dlkcat.csv")))
         if not kcat_paths:
             kcat_paths = sorted(glob.glob(str(md / "seed_*/*_kcatpred_dlkcat.csv")))
         if not kcat_paths:
-            print(f"[load] {name}: no DLKcat outputs; skipping")
+            print(f"[load] {method_id}: no DLKcat outputs; skipping")
             continue
         parts = [_normalise_cols(pd.read_csv(p)) for p in kcat_paths]
         kcat_df = pd.concat(parts, ignore_index=True)
@@ -276,8 +283,9 @@ def _build_master_from_score_dir(score_dir: Path) -> pd.DataFrame:
         per_rmsd  = _per_protein_rmsd(rmsd_csv)
         merged = per_delta.merge(per_rec, on="ProID", how="outer") \
                           .merge(per_rmsd, on="ProID", how="left")
-        print(f"[load] {name}: {len(kcat_paths)} kcat file(s), {len(merged):,} proteins")
-        per_method[name] = merged
+        print(f"[load] {method_id} -> {display!r}: {len(kcat_paths)} kcat file(s), "
+              f"{len(merged):,} proteins")
+        per_method[display] = merged
 
     master = None
     metric_cols = ["delta_lgKcat", "recovery", "Backbone_RMSD", "Avg_pLDDT", "n_obs"]

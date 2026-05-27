@@ -170,6 +170,27 @@ def run_gdc_funnel(
     }
 
 
+def _auto_discover_predictor(predictions_dir: Path, tag: str) -> Path:
+    """Locate the single ``*_kcatpred_<tag>.csv`` under ``predictions_dir``.
+
+    Matches the manuscript filename convention emitted by
+    ``catif_rl.reward.predictors.<tag>``.
+    """
+    import glob as _glob
+    matches = sorted(_glob.glob(str(predictions_dir / f"*_kcatpred_{tag}.csv")))
+    if not matches:
+        raise SystemExit(
+            f"no *_kcatpred_{tag}.csv under {predictions_dir}; "
+            f"pass --{tag}-csv <path> or check that the wrapper ran with output_dir pointing here."
+        )
+    if len(matches) > 1:
+        raise SystemExit(
+            f"multiple *_kcatpred_{tag}.csv under {predictions_dir}: "
+            f"{[Path(m).name for m in matches]}; pass --{tag}-csv to disambiguate."
+        )
+    return Path(matches[0])
+
+
 def _build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -177,10 +198,15 @@ def _build_arg_parser() -> argparse.ArgumentParser:
                    help="raw candidate pool (typically 62,900 rows from EnzymeIF sampling)")
     p.add_argument("--structural-metrics", type=Path, required=True,
                    help="ESMFold refold metrics with Backbone_RMSD + Avg_pLDDT per variant")
-    p.add_argument("--dlkcat-csv",         type=Path, required=True,
-                   help="DLKcat per-variant predictions (must contain delta_lgKcat)")
-    p.add_argument("--unikp-csv",          type=Path, required=True)
-    p.add_argument("--catapro-csv",        type=Path, required=True)
+    # When --predictions-dir is set and any of the three per-predictor CSVs
+    # is omitted, the wrapper auto-discovers <stem>_kcatpred_<tag>.csv there.
+    p.add_argument("--predictions-dir",    type=Path, default=None,
+                   help="directory holding *_kcatpred_{dlkcat,unikp,catapro}.csv "
+                        "(used to auto-discover any predictor CSV not given explicitly)")
+    p.add_argument("--dlkcat-csv",         type=Path, default=None,
+                   help="DLKcat per-variant predictions; if omitted, auto-discovered under --predictions-dir")
+    p.add_argument("--unikp-csv",          type=Path, default=None)
+    p.add_argument("--catapro-csv",        type=Path, default=None)
     p.add_argument("--output-dir",         type=Path, required=True,
                    help="destination for structure_valid.csv and activity_positive.csv")
     p.add_argument("--rmsd-threshold",     type=float, default=4.0)
@@ -191,6 +217,20 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = _build_arg_parser().parse_args(argv)
+
+    # Fill in any predictor CSVs that weren't explicitly given.
+    if (args.dlkcat_csv is None or args.unikp_csv is None or args.catapro_csv is None):
+        if args.predictions_dir is None:
+            raise SystemExit(
+                "must pass either --predictions-dir or all three of "
+                "--dlkcat-csv / --unikp-csv / --catapro-csv"
+            )
+        if args.dlkcat_csv is None:
+            args.dlkcat_csv = _auto_discover_predictor(args.predictions_dir, "dlkcat")
+        if args.unikp_csv is None:
+            args.unikp_csv = _auto_discover_predictor(args.predictions_dir, "unikp")
+        if args.catapro_csv is None:
+            args.catapro_csv = _auto_discover_predictor(args.predictions_dir, "catapro")
     summary = run_gdc_funnel(
         candidate_csv=args.candidates,
         structural_metrics_csv=args.structural_metrics,

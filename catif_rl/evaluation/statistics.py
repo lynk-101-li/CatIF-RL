@@ -38,6 +38,8 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
+from catif_rl.evaluation._method_registry import display_order, headline_display
+
 HERE = Path(__file__).resolve().parent
 DEFAULT_MASTER = HERE / "master_per_protein.csv"
 DEFAULT_OUTPUT_DIR = HERE
@@ -45,12 +47,12 @@ DEFAULT_OUTPUT_DIR = HERE
 # ----------------------------------------------------------------------
 # Config
 # ----------------------------------------------------------------------
-BASELINE_ORDER = [
-    "ProteinMPNN", "ESM-IF", "LigandMPNN", "PiFold", "ABACUS-T",
-    "GraDe-IF", "EnzymeIF", "CatIF",
-    "CatIF-RL R1", "CatIF-RL R2", "CatIF-RL R3",
-]
-CATIF_RL = "CatIF-RL R3"  # Reference for paired comparisons.
+# Canonical ordering for tables and plots; comes from the central registry
+# (catif_rl.evaluation._method_registry). Keeping this resolution at module
+# load means we still get a clear ImportError if the registry is broken,
+# rather than a confusing KeyError mid-run.
+BASELINE_ORDER = display_order()
+CATIF_RL = headline_display()  # Reference for paired comparisons.
 
 PLDDT_TAU = 90.0
 RMSD_TAU = 4.0

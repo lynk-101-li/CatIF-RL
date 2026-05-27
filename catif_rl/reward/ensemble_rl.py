@@ -36,11 +36,36 @@ Or with explicit input filenames::
 """
 
 import argparse
+import glob
 from pathlib import Path
 import sys
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+
+
+def _auto_discover(in_dir: str, tag: str) -> str:
+    """Locate the single ``*_kcatpred_<tag>.csv`` under ``in_dir``.
+
+    The predictor wrappers (catif_rl.reward.predictors.{dlkcat,unikp,catapro})
+    copy their per-input outputs to the round directory using the manuscript
+    filename convention ``<input_stem>_kcatpred_<tag>.csv``. This helper
+    auto-discovers them so the shells do not have to thread filenames
+    through. Raises if zero or more than one file matches.
+    """
+    matches = sorted(glob.glob(str(Path(in_dir) / f"*_kcatpred_{tag}.csv")))
+    if not matches:
+        raise SystemExit(
+            f"[ERROR] no *_kcatpred_{tag}.csv under {in_dir}; pass --{tag} <filename> "
+            "or check that the predictor wrapper ran with output_dir pointing here."
+        )
+    if len(matches) > 1:
+        raise SystemExit(
+            f"[ERROR] multiple *_kcatpred_{tag}.csv under {in_dir}: "
+            f"{[Path(m).name for m in matches]}; pass --{tag} <filename> to disambiguate."
+        )
+    return Path(matches[0]).name
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Delta lgKcat normalization + reward-data export")
@@ -55,15 +80,15 @@ def parse_args():
     parser.add_argument("--fig-dir", type=str, default=None,
                         help="output directory for figures (default: <in-dir>/figures)")
 
-    # File-name arguments. These are relative to --in-dir. Defaults follow
-    # the round-N convention used by the predictor wrappers
-    # (e.g. round1_kcatpred_dlkcat.csv) -- override if your filenames differ.
-    parser.add_argument("--dlkcat", type=str, default="dlkcat_pred.csv",
-                        help="DLKcat prediction filename inside --in-dir")
-    parser.add_argument("--catapro", type=str, default="catapro_pred.csv",
-                        help="CataPro prediction filename inside --in-dir")
-    parser.add_argument("--unikp", type=str, default="unikp_pred.csv",
-                        help="UniKP prediction filename inside --in-dir")
+    # File-name arguments are optional. When omitted, each predictor's CSV is
+    # auto-discovered under --in-dir by matching ``*_kcatpred_<tag>.csv``
+    # (the manuscript filename convention the predictor wrappers emit).
+    parser.add_argument("--dlkcat", type=str, default=None,
+                        help="DLKcat prediction filename inside --in-dir (default: auto-discover *_kcatpred_dlkcat.csv)")
+    parser.add_argument("--catapro", type=str, default=None,
+                        help="CataPro prediction filename inside --in-dir (default: auto-discover)")
+    parser.add_argument("--unikp", type=str, default=None,
+                        help="UniKP prediction filename inside --in-dir (default: auto-discover)")
     parser.add_argument("--reward-file", type=str, required=True,
                         help="output reward-data CSV (consumed by catif_rl.training.grpo)")
 
@@ -73,6 +98,13 @@ def parse_args():
         args.posi_dir = str(Path(args.in_dir) / "stats")
     if args.fig_dir is None:
         args.fig_dir = str(Path(args.in_dir) / "figures")
+    # Auto-discover any predictor filename the caller didn't override.
+    if args.dlkcat is None:
+        args.dlkcat = _auto_discover(args.in_dir, "dlkcat")
+    if args.unikp is None:
+        args.unikp = _auto_discover(args.in_dir, "unikp")
+    if args.catapro is None:
+        args.catapro = _auto_discover(args.in_dir, "catapro")
     return args
 
 # Key change: dedup / alignment on three columns

@@ -65,13 +65,13 @@ activate_env catapro
 python -c "from catif_rl.reward.predictors import catapro; catapro.predict('$CANDIDATES', mode='benchmark', output_dir='$PRED_DIR')"
 
 # Stage 4: run the GDC funnel (structural filter + ensemble normalizer).
+# The wrapper auto-discovers <stem>_kcatpred_{dlkcat,unikp,catapro}.csv
+# under --predictions-dir (manuscript filename convention).
 activate_env catif
 python -m catif_rl.reward.gdc \
   --candidates         "$CANDIDATES" \
   --structural-metrics "$STRUCTURAL_METRICS" \
-  --dlkcat-csv         "$PRED_DIR/dlkcat_pred.csv" \
-  --unikp-csv          "$PRED_DIR/unikp_pred.csv" \
-  --catapro-csv        "$PRED_DIR/catapro_pred.csv" \
+  --predictions-dir    "$PRED_DIR" \
   --output-dir         "$WORK_DIR" \
   --rmsd-threshold     "$RMSD_THRESHOLD" \
   --plddt-threshold    "$PLDDT_THRESHOLD" \

@@ -54,9 +54,9 @@ def predict(
     Returns the path to the generated ``*_kcatpred_unikp.csv``.
 
     When ``output_dir`` is supplied, the upstream output is additionally
-    copied to ``<output_dir>/unikp_pred.csv`` (the canonical filename
-    consumed by ``catif_rl.reward.gdc`` and ``catif_rl.reward.ensemble_rl``)
-    and that path is returned.
+    copied to ``<output_dir>/<input_stem>_kcatpred_unikp.csv`` (the
+    manuscript filename convention; both ``catif_rl.reward.gdc`` and
+    ``catif_rl.reward.ensemble_rl`` glob for ``*_kcatpred_unikp.csv``).
     """
 
     if shutil.which("conda") is None:
@@ -81,7 +81,7 @@ def predict(
     if output_dir is not None:
         output_dir = Path(output_dir).resolve()
         output_dir.mkdir(parents=True, exist_ok=True)
-        canonical = output_dir / "unikp_pred.csv"
-        shutil.copyfile(upstream_output, canonical)
-        return canonical
+        dst = output_dir / upstream_output.name
+        shutil.copyfile(upstream_output, dst)
+        return dst
     return upstream_output

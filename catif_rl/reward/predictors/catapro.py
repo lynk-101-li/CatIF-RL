@@ -90,7 +90,8 @@ def predict(
     if output_dir is not None:
         output_dir = Path(output_dir).resolve()
         output_dir.mkdir(parents=True, exist_ok=True)
-        canonical = output_dir / "catapro_pred.csv"
-        shutil.copyfile(upstream_output, canonical)
-        return canonical
+        # Manuscript filename convention: <input_stem>_kcatpred_catapro.csv.
+        dst = output_dir / upstream_output.name
+        shutil.copyfile(upstream_output, dst)
+        return dst
     return upstream_output
