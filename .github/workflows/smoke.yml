@@ -88,6 +88,7 @@ jobs:
             catif_rl.reward.gdc
             catif_rl.evaluation.structural
             catif_rl.evaluation.recovery
+            catif_rl.evaluation.success_rate
             catif_rl.evaluation.build_master
             catif_rl.evaluation.statistics
             catif_rl.data.esmfold_backbones
