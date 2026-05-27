@@ -15,7 +15,11 @@ BENCH_DIR="${BENCH_DIR:-$RUNS_DIR/benchmark}"
 TEST_REF_DIR="${TEST_REF_DIR:-$DATA_DIR/raw/test}"
 TEMPLATE_CSV="${TEMPLATE_CSV:-$DATA_DIR/brenda/test_mut_substrate_template.csv}"
 SCORE_DIR="${SCORE_DIR:-$RUNS_DIR/benchmark_scores}"
-STRUCT_SEED=1   # SI Section 2.7: structural metrics on a single pre-specified seed
+# Per SI Section 2.7: the structural-evaluation subset is computed on a
+# single pre-specified seed (the first entry of the benchmark seed list,
+# i.e. 1111). Exposed as STRUCT_SEED so users can override deliberately;
+# the published default matches the seed used in SI Tables S7 / S8.
+STRUCT_SEED="${STRUCT_SEED:-${BENCHMARK_SEEDS[0]}}"
 
 cd "$REPO_ROOT"
 mkdir -p "$SCORE_DIR"
@@ -43,16 +47,16 @@ for method_dir in "$BENCH_DIR"/*/; do
     python -c "from catif_rl.reward.predictors import dlkcat; dlkcat.predict('$seed_score_dir/test_mut_substrate_seed${seed}.csv', mode='benchmark', output_dir='$seed_score_dir')"
   done
 
-  # (2) Structural evaluation on the first benchmark seed (per SI §2.7).
+  # (2) Structural evaluation on the pre-specified structural seed (per SI §2.7).
   activate_env esmfold
   python -m catif_rl.data.esmfold_backbones \
-    --fasta "$method_dir/seed_${BENCHMARK_SEEDS[0]}" \
-    --output-dir "$method_score_dir/refold_seed${BENCHMARK_SEEDS[0]}"
+    --fasta "$method_dir/seed_${STRUCT_SEED}" \
+    --output-dir "$method_score_dir/refold_seed${STRUCT_SEED}"
 
   activate_env catif
   python -m catif_rl.evaluation.structural \
     --ref-dir "$TEST_REF_DIR" \
-    --pred-dir "$method_score_dir/refold_seed${BENCHMARK_SEEDS[0]}" \
+    --pred-dir "$method_score_dir/refold_seed${STRUCT_SEED}" \
     --csv-out "$method_score_dir/rmsd_plddt.csv" \
     --metrics rmsd,plddt
 done
