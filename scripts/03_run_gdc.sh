@@ -31,7 +31,7 @@ mkdir -p "$WORK_DIR" "$REFOLD_DIR" "$PRED_DIR"
 # Stage 1: bulk sampling from EnzymeIF (K samples per training backbone).
 activate_env catif
 python -m catif_rl.sampling.batch \
-  --condition-dirs "$DATA_DIR/process/train" \
+  --condition-dirs "$DATA_DIR/process/enzymeif/train_and_validation" \
   --pairs-csv      "$PAIRS_CSV" \
   --ckpt-path      "$ENZYMEIF_CKPT" \
   --group-size     "$GROUP_SIZE" \

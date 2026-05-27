@@ -72,6 +72,37 @@ data/
     └── round3_reward_data.csv     # CatIF-RL R2 -> CatIF-RL Round-3 (final)
 ```
 
+### `data/process/` layout (produced by `scripts/01_build_dataset.sh`)
+
+`01_build_dataset.sh` step 2 mirrors the `data/raw/` layout exactly, just with
+`.pt` PyG graphs instead of PDBs. These per-cohort directories are the stable,
+documented inputs for every downstream stage:
+
+```
+data/process/
+├── enzymeif/
+│   ├── train_and_validation/    # 6,290 .pt — RL/GDC conditioning pool
+│   └── cath_v4_2_0/             # 18,629 .pt — CATH regularizers
+├── catif/
+│   ├── train/                   # 5,430 .pt — GDC train mutants
+│   └── valid/                   # 604 .pt — GDC valid mutants
+├── test/                        # 1,423 .pt — held-out DLKcat benchmark
+├── train/                       # post-9:1 split + CATH merge — EnzymeIF supervised input
+└── valid/                       # post-9:1 split + CATH merge — EnzymeIF supervised input
+```
+
+**Stable input contracts**:
+
+- `catif_rl.sampling.batch` (used by GDC and the three RL rounds) reads its
+  conditioning pool from `data/process/enzymeif/train_and_validation/`. RL
+  outer-loop sampling intentionally uses the 6,290 native EnzymeIF
+  backbones, not the post-split `data/process/{train,valid}/` directories
+  (those carry CATH regularizers, which are not part of the RL conditioning
+  pool described in §2.5).
+- `catif_rl.training.train_supervised` reads `data/process/{train,valid}/`
+  (the post-split + CATH-merged cohort).
+- `catif_rl.sampling.infer` (held-out benchmark) reads `data/process/test/`.
+
 ### What is in the Zenodo deposit vs. what gets fetched on first run
 
 The Zenodo deposit at <https://doi.org/10.5281/zenodo.20357062> (concept

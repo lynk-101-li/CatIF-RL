@@ -22,7 +22,7 @@ REWARD_CSV="$ROUND_DIR/round3_reward_data.csv"
 
 activate_env catif
 python -m catif_rl.sampling.batch \
-  --condition-dirs "$DATA_DIR/process/train" "$DATA_DIR/process/valid" \
+  --condition-dirs "$DATA_DIR/process/enzymeif/train_and_validation" \
   --pairs-csv "$DATA_DIR/brenda/brenda_train_and_dev_set.csv" \
   --ckpt-path "$ROUND2_CKPT" \
   --group-size 5 \
@@ -46,7 +46,7 @@ python -m catif_rl.reward.ensemble_rl \
 CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" python -m catif_rl.training.grpo \
   --policy-ckpt "$ROUND2_CKPT" \
   --ref-ckpt "$CATIF_REF" \
-  --condition-dir "$DATA_DIR/process/train" \
+  --condition-dir "$DATA_DIR/process/enzymeif/train_and_validation" \
   --scored-csv "$REWARD_CSV" \
   --output-dir "$ROUND_DIR" \
   --device "$DEVICE" \

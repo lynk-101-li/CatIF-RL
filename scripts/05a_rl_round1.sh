@@ -22,7 +22,7 @@ REWARD_CSV="$ROUND_DIR/round1_reward_data.csv"
 # Stage 1: bulk sample G=5 candidates per (enzyme, substrate).
 activate_env catif
 python -m catif_rl.sampling.batch \
-  --condition-dirs "$DATA_DIR/process/train" "$DATA_DIR/process/valid" \
+  --condition-dirs "$DATA_DIR/process/enzymeif/train_and_validation" \
   --pairs-csv "$DATA_DIR/brenda/brenda_train_and_dev_set.csv" \
   --ckpt-path "$CATIF_CKPT" \
   --group-size 5 \
@@ -52,7 +52,7 @@ python -m catif_rl.reward.ensemble_rl \
 CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" python -m catif_rl.training.grpo \
   --policy-ckpt "$CATIF_CKPT" \
   --ref-ckpt "$CATIF_CKPT" \
-  --condition-dir "$DATA_DIR/process/train" \
+  --condition-dir "$DATA_DIR/process/enzymeif/train_and_validation" \
   --scored-csv "$REWARD_CSV" \
   --output-dir "$ROUND_DIR" \
   --device "$DEVICE" \

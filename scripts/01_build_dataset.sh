@@ -47,12 +47,19 @@ fi
 
 # ---------- (2) PDB -> PyG .pt graph tensors (per-cohort) ----------
 # `catif_rl.data.graph_construction` operates one directory at a time. We run
-# it once per raw PDB source so the .pt tensors live under data/process/_raw_pt/
-# in a structure that mirrors data/raw/. The split step below (3) then assembles
-# the final train/valid/test partitions from these intermediate .pt files.
+# it once per raw PDB source; the .pt tensors mirror the raw layout under
+# data/process/. After this step the on-disk structure is:
+#
+#   data/process/enzymeif/train_and_validation/  6,290 .pt  <-- RL/GDC cond pool
+#   data/process/enzymeif/cath_v4_2_0/           18,629 .pt <-- CATH regularizers
+#   data/process/catif/train/                    5,430 .pt  <-- GDC train mutants
+#   data/process/catif/valid/                    604 .pt    <-- GDC valid mutants
+#   data/process/test/                           1,423 .pt  <-- held-out test
+#
+# The split step below (3) then writes the supervised final partition to
+#   data/process/{train,valid}/    (EnzymeIF cohort 9:1 split + CATH merge)
+# leaving the per-cohort directories above untouched as stable RL/GDC inputs.
 echo "[build_dataset] Step 2: PDB -> .pt graph tensors per cohort"
-RAW_PT_BASE="${RAW_PT_BASE:-$PROCESS_DIR/_raw_pt}"
-mkdir -p "$RAW_PT_BASE"
 
 for src_subdir in \
     "enzymeif/train_and_validation" \
@@ -61,7 +68,7 @@ for src_subdir in \
     "catif/valid" \
     "test"; do
   in_dir="$DATA_DIR/raw/$src_subdir"
-  out_dir="$RAW_PT_BASE/$src_subdir"
+  out_dir="$PROCESS_DIR/$src_subdir"
   if [ ! -d "$in_dir" ]; then
     echo "[build_dataset]   skipping $src_subdir (no $in_dir)"; continue
   fi
@@ -90,8 +97,8 @@ python -m catif_rl.data.splits \
   --train-csv      "$DATA_DIR/brenda/Brenda_dataset_split/train_set.csv" \
   --dev-csv        "$DATA_DIR/brenda/Brenda_dataset_split/dev_set.csv" \
   --test-csv       "$DATA_DIR/brenda/Brenda_dataset_split/test_set.csv" \
-  --cath-train-dir "$RAW_PT_BASE/enzymeif/cath_v4_2_0" \
-  --cath-valid-dir "$RAW_PT_BASE/enzymeif/cath_v4_2_0" \
+  --cath-train-dir "$PROCESS_DIR/enzymeif/cath_v4_2_0" \
+  --cath-valid-dir "$PROCESS_DIR/enzymeif/cath_v4_2_0" \
   --output-dir     "$PROCESS_DIR"
 
 echo "[build_dataset] Done. Processed graphs at: $PROCESS_DIR"
