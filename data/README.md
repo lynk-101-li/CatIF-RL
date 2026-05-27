@@ -130,12 +130,15 @@ they are downloaded on first run from RCSB via
 `catif_rl/data/assets/chain_set_splits.json` (originally from GraDe-IF;
 CATH itself is CC BY 4.0).
 
-To download the deposit (v0.1.0 snapshot DOI: 10.5281/zenodo.20357063):
+To download the deposit (latest published snapshot DOI: 10.5281/zenodo.20412557,
+v0.2.0; the data tarball is carried over from v0.1.0 unchanged so its
+filename retains the `_v0.1.0` tag):
 
 ```bash
-# 823 MB (decimal) of native + GDC-mutant + test PDBs and supporting CSVs
-wget https://zenodo.org/records/20357063/files/catif_rl_data_v0.1.0.tar.gz
-wget https://zenodo.org/records/20357063/files/catif_rl_data_v0.1.0.tar.gz.sha256
+# 823 MB (decimal) of native + GDC-mutant + test PDBs and supporting CSVs.
+# sha256 = 3b57b24f4da69da72dba02e5b52c7a710f9b2b73805fdf51baa3d162b3f14022
+wget https://zenodo.org/records/20412557/files/catif_rl_data_v0.1.0.tar.gz
+wget https://zenodo.org/records/20412557/files/catif_rl_data_v0.1.0.tar.gz.sha256
 shasum -a 256 -c catif_rl_data_v0.1.0.tar.gz.sha256
 tar -xzf catif_rl_data_v0.1.0.tar.gz       # populates  data/
 ```
@@ -150,7 +153,7 @@ Instead, the exact per-seed FASTA outputs that produced the manuscript
 Table 1 numbers are shipped via Zenodo as a separate tarball.
 
 Layout per the manuscript (5 seeds × 5 methods × 1,423 enzymes = 35,575 files,
-~17.8 GB raw, ~5–7 GB compressed):
+~17 MB raw text, ~11 MB compressed -- each file is a single-record FASTA):
 
 ```
 data/benchmark_baselines/
@@ -161,14 +164,15 @@ data/benchmark_baselines/
 └── abacust/seed_*/                sequence_<ProID>.fa
 ```
 
-Download instructions (placeholders until the v0.1.0 baseline tarball is
-uploaded; the staging script `scripts/admin/stage_baseline_archives.sh`
-produces the exact artefact and prints its sha256):
+Download instructions (the baseline tarball is bundled with the same
+v0.2.0 Zenodo deposit as the main data tarball; the file is carried over
+from v0.1.0 unchanged so its filename retains the `_v0.1.0` tag):
 
 ```bash
-# Replace CATIF_RL_BASELINES_TARBALL_URL with the Zenodo URL once available
-wget CATIF_RL_BASELINES_TARBALL_URL                 # ~5-7 GB
-wget CATIF_RL_BASELINES_TARBALL_URL.sha256
+# ~11 MB; 35,575 single-record FASTAs across 5 baselines × 5 seeds.
+# sha256 = 09a2f79c42be6b4543791755ce78da28d1a16cb2199813611ddb7c689dd72e21
+wget https://zenodo.org/records/20412557/files/catif_rl_baselines_v0.1.0.tar.gz
+wget https://zenodo.org/records/20412557/files/catif_rl_baselines_v0.1.0.tar.gz.sha256
 shasum -a 256 -c catif_rl_baselines_v0.1.0.tar.gz.sha256
 mkdir -p data/benchmark_baselines
 tar -xzf catif_rl_baselines_v0.1.0.tar.gz -C data/benchmark_baselines/

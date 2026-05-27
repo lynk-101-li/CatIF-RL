@@ -24,12 +24,16 @@ The five checkpoints are archived in the same Zenodo deposit as the
 processed dataset:
 
 - Concept DOI (always latest): <https://doi.org/10.5281/zenodo.20357062>
-- Version DOI (v0.1.0 snapshot): <https://doi.org/10.5281/zenodo.20357063>
+- Latest version DOI (v0.2.0 snapshot): <https://doi.org/10.5281/zenodo.20412557>
+
+The checkpoints tarball is carried over from v0.1.0 unchanged, so its
+filename retains the `_v0.1.0` tag.
 
 ```bash
-# ~156 MB (decimal) of model weights for all five pipeline stages
-wget https://zenodo.org/records/20357063/files/catif_rl_checkpoints_v0.1.0.tar.gz
-wget https://zenodo.org/records/20357063/files/catif_rl_checkpoints_v0.1.0.tar.gz.sha256
+# ~156 MB (decimal) of model weights for all five pipeline stages.
+# sha256 = e16a09f195b55ef7a389ceefb9659bac0e32d61573e2d3456302454b78b36ef8
+wget https://zenodo.org/records/20412557/files/catif_rl_checkpoints_v0.1.0.tar.gz
+wget https://zenodo.org/records/20412557/files/catif_rl_checkpoints_v0.1.0.tar.gz.sha256
 shasum -a 256 -c catif_rl_checkpoints_v0.1.0.tar.gz.sha256
 tar -xzf catif_rl_checkpoints_v0.1.0.tar.gz   # populates  checkpoints/
 ```
