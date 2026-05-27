@@ -44,8 +44,13 @@ python -c "from catif_rl.reward.predictors import catapro; catapro.predict('$RAW
 
 # Stage 3: normalise and ensemble.
 activate_env catif
+# SI Table S5 calibration: reuse the q90-q10 scales frozen by GDC
+# (runs/gdc/normalizer.json) for every RL round, so reward magnitudes are
+# directly comparable across R1 / R2 / R3.
+NORMALIZER_JSON="${NORMALIZER_JSON:-$RUNS_DIR/gdc/normalizer.json}"
 python -m catif_rl.reward.ensemble_rl \
-  --in-dir "$ROUND_DIR" \
+  --in-dir      "$ROUND_DIR" \
+  --normalizer  "$NORMALIZER_JSON" \
   --reward-file "$REWARD_CSV"
 
 # Stage 4: GRPO inner loop (2 epochs operational; --epochs flag = 50 per Table S3).

@@ -31,6 +31,8 @@ Usage (as invoked from ``scripts/03_run_gdc.sh``)::
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
+import json
 import sys
 from pathlib import Path
 
@@ -41,21 +43,53 @@ import pandas as pd
 # Join keys used across the candidate / structural / predictor CSVs.
 JOIN_KEYS = ["ProID", "ProSeq'"]
 DELTA_COL = "delta_lgKcat"
+NORMALIZER_FILENAME = "normalizer.json"   # frozen scale calibration, see M1 below
 
 
-def _scale_only_norm(x: pd.Series) -> pd.Series:
-    """Scale-only normalize a Series: x / scale, with q90-q10 -> std -> 1 fallback.
+def _compute_one_normalizer(x: pd.Series) -> dict:
+    """Compute the scale-only normalizer parameters for one predictor's deltas.
 
-    Matches the formulation used in catif_rl.reward.ensemble_gdc and
-    ensemble_rl. Sign is preserved (no centering).
+    Mirrors the formulation in ``catif_rl.reward.ensemble_gdc`` / ``ensemble_rl``:
+    scale = q90 - q10; if degenerate, fall back to std(x); then to 1.
+
+    Returns
+    -------
+    dict with keys ``q10``, ``q90``, ``fallback`` (one of ``"q90-q10"``,
+    ``"std"``, ``"fallback_1"``), and ``scale`` (the divisor actually used).
     """
     x = pd.to_numeric(x, errors="coerce")
-    q10, q90 = x.quantile(0.10), x.quantile(0.90)
+    q10 = x.quantile(0.10)
+    q90 = x.quantile(0.90)
+    fallback = "q90-q10"
     scale = (q90 - q10) if pd.notna(q10) and pd.notna(q90) else float("nan")
     if not pd.notna(scale) or scale == 0:
         sd = x.std(ddof=0)
-        scale = sd if (pd.notna(sd) and sd > 0) else 1.0
-    return x / scale
+        if pd.notna(sd) and sd > 0:
+            scale, fallback = float(sd), "std"
+        else:
+            scale, fallback = 1.0, "fallback_1"
+    return {
+        "q10": float(q10) if pd.notna(q10) else None,
+        "q90": float(q90) if pd.notna(q90) else None,
+        "fallback": fallback,
+        "scale": float(scale),
+    }
+
+
+def _apply_normalizer(x: pd.Series, scale: float) -> pd.Series:
+    """Divide by a saved scale (no centering, sign preserved)."""
+    return pd.to_numeric(x, errors="coerce") / float(scale)
+
+
+def _scale_only_norm(x: pd.Series) -> pd.Series:
+    """Back-compat shim: compute the GDC-style normalizer on-the-fly and apply it.
+
+    Used by the in-process path inside ``run_gdc_funnel`` when no pre-computed
+    normalizer is being threaded through. New callers should prefer
+    ``_compute_one_normalizer`` + ``_apply_normalizer`` so the calibration can
+    be persisted to ``normalizer.json`` and reused across rounds.
+    """
+    return _apply_normalizer(x, _compute_one_normalizer(x)["scale"])
 
 
 def _read_predictor_csv(path: Path, tag: str) -> pd.DataFrame:
@@ -147,9 +181,41 @@ def run_gdc_funnel(
               .merge(d_uni, on=JOIN_KEYS, how="inner")
               .merge(d_cat, on=JOIN_KEYS, how="inner"))
 
-    merged["s_dlkcat"]  = _scale_only_norm(merged["delta_dlkcat"])
-    merged["s_unikp"]   = _scale_only_norm(merged["delta_unikp"])
-    merged["s_catapro"] = _scale_only_norm(merged["delta_catapro"])
+    # Compute the q10 / q90 / std-fallback normalizer ONCE on the structure-
+    # valid GDC pool and persist it to normalizer.json. Subsequent RL rounds
+    # load this calibration via `catif_rl.reward.ensemble_rl --normalizer ...`
+    # instead of recomputing quantiles on every round's distribution, which
+    # is what SI Table S5 calls the "frozen" reward scale.
+    normalizer = {
+        "version": "1.0",
+        "frozen_at": _dt.datetime.utcnow().isoformat() + "Z",
+        "frozen_from": str(output_dir.resolve()),
+        "n_samples_used": int(len(merged)),
+        "rmsd_threshold": float(rmsd_threshold),
+        "plddt_threshold": float(plddt_threshold),
+        "predictors": {
+            "dlkcat":  _compute_one_normalizer(merged["delta_dlkcat"]),
+            "unikp":   _compute_one_normalizer(merged["delta_unikp"]),
+            "catapro": _compute_one_normalizer(merged["delta_catapro"]),
+        },
+    }
+    normalizer_path = output_dir / NORMALIZER_FILENAME
+    with normalizer_path.open("w") as f:
+        json.dump(normalizer, f, indent=2)
+    print(f"[gdc] froze normalizer over {normalizer['n_samples_used']:,} structure-valid variants:")
+    for tag, params in normalizer["predictors"].items():
+        print(f"  {tag:8s} scale={params['scale']:.6g}  (fallback={params['fallback']}, "
+              f"q10={params['q10']!s:>8}, q90={params['q90']!s:>8})")
+    print(f"[gdc] wrote: {normalizer_path}")
+
+    # Apply the frozen scales to compute mean3 (equivalent to the old
+    # on-the-fly _scale_only_norm path, but with the saved scale on record).
+    merged["s_dlkcat"]  = _apply_normalizer(merged["delta_dlkcat"],
+                                            normalizer["predictors"]["dlkcat"]["scale"])
+    merged["s_unikp"]   = _apply_normalizer(merged["delta_unikp"],
+                                            normalizer["predictors"]["unikp"]["scale"])
+    merged["s_catapro"] = _apply_normalizer(merged["delta_catapro"],
+                                            normalizer["predictors"]["catapro"]["scale"])
     merged["mean3"]     = (merged["s_dlkcat"] + merged["s_unikp"] + merged["s_catapro"]) / 3.0
 
     activity_positive = merged.loc[merged["mean3"] > ensemble_threshold].reset_index(drop=True)
@@ -167,6 +233,7 @@ def run_gdc_funnel(
         "n_activity_positive": n_pos,
         "structure_valid_csv": str(struct_path),
         "activity_positive_csv": str(pos_path),
+        "normalizer_json": str(normalizer_path),
     }
 
 

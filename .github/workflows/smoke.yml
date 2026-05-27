@@ -208,6 +208,10 @@ jobs:
           sys.exit(0 if ok else 1)
           PY
 
+      # ----- Frozen-normalizer round-trip (external-review round 2 M1) ----------------
+      - name: GDC normalizer round-trip
+        run: PYTHONPATH=. python tests/test_normalizer_roundtrip.py
+
       # ----- 2-method x 2-seed benchmark-aggregation fixture ---------------
       # Catches every regression class behind external-review round 2 blocker B4:
       #   - DLKcat wrapper / aggregator filename drift

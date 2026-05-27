@@ -37,6 +37,7 @@ Or with explicit input filenames::
 
 import argparse
 import glob
+import json
 from pathlib import Path
 import sys
 import pandas as pd
@@ -91,6 +92,12 @@ def parse_args():
                         help="UniKP prediction filename inside --in-dir (default: auto-discover)")
     parser.add_argument("--reward-file", type=str, required=True,
                         help="output reward-data CSV (consumed by catif_rl.training.grpo)")
+    parser.add_argument("--normalizer", type=str, default=None,
+                        help="path to the normalizer.json frozen by catif_rl.reward.gdc. "
+                             "When provided, the saved per-predictor q90-q10 scales are "
+                             "reused for this round (SI Table S5 'frozen' calibration). "
+                             "Default (None) recomputes quantiles on this round's data, "
+                             "matching the legacy behaviour but DRIFTING across rounds.")
 
     args = parser.parse_args()
     # Default sub-directories under --in-dir if not given.
@@ -228,11 +235,42 @@ def main():
     # ---- Merge three tables, then enter scale-only normalization ---- #
     df = d_dlk.merge(d_cat, on=KEYS, how='inner').merge(d_uni, on=KEYS, how='inner')
 
-    # Scale-only normalization (divide, no subtract; sign preserved)
-    df["s_dlkcat"], s_dlk, m_dlk = scale_only_norm(df["delta_dlkcat"])
-    df["s_catapro"], s_cat, m_cat = scale_only_norm(df["delta_catapro"])
-    df["s_unikp"],  s_uni, m_uni = scale_only_norm(df["delta_unikp"])
-    print(f"[scale] DLKcat scale={s_dlk:.6g} ({m_dlk})  CataPro scale={s_cat:.6g} ({m_cat})  UniKP scale={s_uni:.6g} ({m_uni})")
+    # If --normalizer was supplied, reuse the q90-q10 scales frozen by GDC
+    # (SI Table S5 "frozen" reward calibration). Otherwise recompute on this
+    # round's distribution -- legacy behaviour, drifts across rounds.
+    if args.normalizer is not None:
+        with open(args.normalizer) as _f:
+            _nrm = json.load(_f)
+        try:
+            s_dlk = float(_nrm["predictors"]["dlkcat"]["scale"])
+            s_cat = float(_nrm["predictors"]["catapro"]["scale"])
+            s_uni = float(_nrm["predictors"]["unikp"]["scale"])
+            m_dlk = _nrm["predictors"]["dlkcat"]["fallback"]
+            m_cat = _nrm["predictors"]["catapro"]["fallback"]
+            m_uni = _nrm["predictors"]["unikp"]["fallback"]
+        except KeyError as e:
+            raise SystemExit(
+                f"[ERROR] --normalizer {args.normalizer} missing key {e!s}; expected "
+                "the schema written by catif_rl.reward.gdc (version 1.0)."
+            )
+        df["s_dlkcat"]  = pd.to_numeric(df["delta_dlkcat"],  errors="coerce") / s_dlk
+        df["s_catapro"] = pd.to_numeric(df["delta_catapro"], errors="coerce") / s_cat
+        df["s_unikp"]   = pd.to_numeric(df["delta_unikp"],   errors="coerce") / s_uni
+        print(f"[scale] FROZEN ({args.normalizer}): "
+              f"DLKcat scale={s_dlk:.6g} ({m_dlk})  "
+              f"CataPro scale={s_cat:.6g} ({m_cat})  "
+              f"UniKP scale={s_uni:.6g} ({m_uni})")
+    else:
+        # Legacy on-the-fly per-round calibration. Emit a warning so reviewers
+        # see the drift risk clearly in the log.
+        print("[scale][WARN] --normalizer not provided; recomputing q90-q10 on this round's data. "
+              "This drifts across RL rounds; pass --normalizer runs/gdc/normalizer.json "
+              "for paper-exact reproducibility (SI Table S5).", file=sys.stderr)
+        df["s_dlkcat"], s_dlk, m_dlk = scale_only_norm(df["delta_dlkcat"])
+        df["s_catapro"], s_cat, m_cat = scale_only_norm(df["delta_catapro"])
+        df["s_unikp"],  s_uni, m_uni = scale_only_norm(df["delta_unikp"])
+        print(f"[scale] LIVE: DLKcat scale={s_dlk:.6g} ({m_dlk})  "
+              f"CataPro scale={s_cat:.6g} ({m_cat})  UniKP scale={s_uni:.6g} ({m_uni})")
 
     # Equal-weight sum / mean
     df["sum3"]  = (df["s_dlkcat"] + df["s_catapro"] + df["s_unikp"])

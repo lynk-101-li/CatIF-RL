@@ -39,8 +39,12 @@ activate_env catapro
 python -c "from catif_rl.reward.predictors import catapro; catapro.predict('$RAW_SAMPLE', mode='rl', rl_round_tag='round2', rl_subset_tag='r1_epoch02', output_dir='$ROUND_DIR')"
 
 activate_env catif
+# SI Table S5 calibration: reuse the q90-q10 scales frozen by GDC, so the
+# reward scale matches Round 1 (and the published numbers).
+NORMALIZER_JSON="${NORMALIZER_JSON:-$RUNS_DIR/gdc/normalizer.json}"
 python -m catif_rl.reward.ensemble_rl \
-  --in-dir "$ROUND_DIR" \
+  --in-dir      "$ROUND_DIR" \
+  --normalizer  "$NORMALIZER_JSON" \
   --reward-file "$REWARD_CSV"
 
 CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" python -m catif_rl.training.grpo \
