@@ -78,27 +78,17 @@ for src_subdir in \
     --output-dir "$out_dir"
 done
 
-# ---------- (3) Split / merge enzyme + CATH for the EnzymeIF cohort ----------
-# Canonical pipeline (see catif_rl/data/_split_scripts/README_split_workflow.txt):
-#   align_pdb_names.py -> split_baseon_sequences.py -> run_split.py
-#   -> dataset_split_final.py
-# Produces the 5,661 / 629 enzyme split (random.Random(1234), 9:1) and merges
-# with the 18,021 / 608 CATH split, yielding the EnzymeIF training cohort
-# summarised in SI Table S4.
-#
-# The four legacy scripts have working-directory assumptions baked into their
-# defaults, so we expose them through catif_rl.data.splits which calls each
-# subprocess in order. Tune --pdb-dir / --train-csv / --dev-csv / --test-csv
-# to match wherever your BRENDA pre-processing put those files (defaults from
-# DLKcat live under data/brenda/).
-echo "[build_dataset] Step 3: EnzymeIF split + merge"
+# ---------- (3) EnzymeIF cohort 9:1 split + CATH merge -----------------------
+# catif_rl.data.splits implements the manuscript split directly (no legacy
+# subprocess chain): 6,290 enzyme graphs -> 5,661 train + 629 valid using
+# random.Random(1234); CATH chains partitioned via the manifest at
+# catif_rl/data/assets/chain_set_splits.json (18,021 train + 608 valid).
+# The script ASSERTS the SI Table S4 counts at the end -- any drift is fatal.
+echo "[build_dataset] Step 3: EnzymeIF 9:1 split + CATH merge"
 python -m catif_rl.data.splits \
-  --pdb-dir        "$DATA_DIR/raw/enzymeif/train_and_validation" \
-  --train-csv      "$DATA_DIR/brenda/Brenda_dataset_split/train_set.csv" \
-  --dev-csv        "$DATA_DIR/brenda/Brenda_dataset_split/dev_set.csv" \
-  --test-csv       "$DATA_DIR/brenda/Brenda_dataset_split/test_set.csv" \
-  --cath-train-dir "$PROCESS_DIR/enzymeif/cath_v4_2_0" \
-  --cath-valid-dir "$PROCESS_DIR/enzymeif/cath_v4_2_0" \
-  --output-dir     "$PROCESS_DIR"
+  --enzyme-graphs-dir "$PROCESS_DIR/enzymeif/train_and_validation" \
+  --cath-graphs-dir   "$PROCESS_DIR/enzymeif/cath_v4_2_0" \
+  --output-dir        "$PROCESS_DIR" \
+  --seed              1234
 
 echo "[build_dataset] Done. Processed graphs at: $PROCESS_DIR"
