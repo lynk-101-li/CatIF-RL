@@ -124,7 +124,13 @@ TARBALL="$OUT/catif_rl_baselines_${VERSION}.tar.gz"
 SHAFILE="$TARBALL.sha256"
 echo ""
 echo "[stage] creating tarball: $TARBALL"
-( cd "$STAGE_DIR" && tar -czf "$TARBALL" --options 'gzip:!filename' . )
+# Pipe `tar` -> `gzip -n` so the gzip header carries no original filename
+# or compress-time mtime; the published sha256 then only depends on the
+# staged tree's contents and per-file mtimes (which rsync -a preserved
+# from --src). This form is portable across GNU tar (Linux) and bsdtar
+# (macOS); the previous `tar --options 'gzip:!filename'` was GNU-only and
+# broke macOS staging.
+( cd "$STAGE_DIR" && tar -cf - . | gzip -n > "$TARBALL" )
 shasum -a 256 "$TARBALL" > "$SHAFILE"
 echo ""
 echo "[stage] tarball ready:"
