@@ -216,24 +216,24 @@ jobs:
           sys.exit(0 if ok else 1)
           PY
 
-      # ----- CSV<->FASTA + ref-stem-regex contract (external-review round 2 B2) -------
+      # ----- CSV<->FASTA + ref-stem-regex contract --------------------------
       - name: CSV->FASTA + structural ref-stem-regex contract
         run: PYTHONPATH=. python tests/test_csv_to_fasta.py
 
-      # ----- Splitter contract + SI Table S4 count assert (external-review round 2 B1)
+      # ----- Splitter contract + SI Table S4 count assert ------------------
       - name: EnzymeIF/CATH splitter reproducibility + count-assert
         run: PYTHONPATH=. python tests/test_splits.py
 
-      # ----- 06 archive-aware branch contract (external-review round 2 B5) ------------
+      # ----- 06 archive-aware branch contract ------------------------------
       - name: 06_sample_benchmark.sh archive-aware branch
         run: bash tests/test_baseline_archive_wiring.sh
 
-      # ----- Frozen-normalizer round-trip (external-review round 2 M1) ----------------
+      # ----- Frozen-normalizer round-trip ----------------------------------
       - name: GDC normalizer round-trip
         run: PYTHONPATH=. python tests/test_normalizer_roundtrip.py
 
       # ----- 2-method x 2-seed benchmark-aggregation fixture ---------------
-      # Catches every regression class behind external-review round 2 blocker B4:
+      # Catches every regression class for the benchmark aggregation contract:
       #   - DLKcat wrapper / aggregator filename drift
       #   - method-id <-> display-name registry drift
       #   - build_master --score-dir glob mismatch
