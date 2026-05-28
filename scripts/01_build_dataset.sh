@@ -32,8 +32,19 @@ PROCESS_DIR="${PROCESS_DIR:-$DATA_DIR/process}"
 # EnzymeIF training uses only the train + valid subsets; the test subset is
 # downloaded for completeness but not consumed (the EnzymeIF test set is
 # the held-out enzyme set under data/raw/test/, not CATH).
-if [ ! -d "$CATH_OUTDIR" ] || [ "$(ls "$CATH_OUTDIR" 2>/dev/null | wc -l)" -lt 18000 ]; then
-  echo "[build_dataset] Downloading CATH v4.2.0 PDBs from RCSB..."
+#
+# Cache-completeness gate: derive the expected file count from the bundled
+# manifest (train + validation = 18,629) so that a partial download cannot
+# be mistaken for a complete one. A previous literal threshold of 18,000
+# would accept 18,001 files as "done", then fail the splits.py SI Table S4
+# assertion downstream and trap users in a no-progress loop.
+EXPECTED_CATH=$(python -c "
+import json, sys
+d = json.load(open('catif_rl/data/assets/chain_set_splits.json'))
+print(len(d['train']) + len(d['validation']))
+")
+if [ ! -d "$CATH_OUTDIR" ] || [ "$(ls "$CATH_OUTDIR" 2>/dev/null | wc -l)" -lt "$EXPECTED_CATH" ]; then
+  echo "[build_dataset] Downloading CATH v4.2.0 PDBs from RCSB (need $EXPECTED_CATH chains)..."
   mkdir -p "$CATH_WORKDIR"/{all,train,validation,test}
   cp catif_rl/data/assets/chain_set_splits.json "$CATH_WORKDIR/chain_set_splits.json"
   ( cd "$CATH_WORKDIR" && python "$REPO_ROOT/catif_rl/data/download_pdb.py" )
@@ -42,7 +53,7 @@ if [ ! -d "$CATH_OUTDIR" ] || [ "$(ls "$CATH_OUTDIR" 2>/dev/null | wc -l)" -lt 1
   cp "$CATH_WORKDIR/validation"/*.pdb "$CATH_OUTDIR/" 2>/dev/null || true
   echo "[build_dataset] CATH PDBs ready: $CATH_OUTDIR ($(ls "$CATH_OUTDIR" | wc -l) chains)"
 else
-  echo "[build_dataset] CATH PDBs already present at $CATH_OUTDIR; skipping download."
+  echo "[build_dataset] CATH PDBs already present at $CATH_OUTDIR ($EXPECTED_CATH expected); skipping download."
 fi
 
 # ---------- (2) PDB -> PyG .pt graph tensors (per-cohort) ----------
