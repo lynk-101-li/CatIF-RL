@@ -164,6 +164,54 @@ def test_missing_cath_chain_only_warns():
         assert summary["counts"]["train_cath"] == 5
 
 
+def test_idempotent_rerun_purges_stale_files():
+    """external-review round 3 M1 regression.
+
+    Re-running the splitter on the same output_dir must NOT leave stale
+    .pt files behind. We pollute train/ with a bogus stale .pt before
+    the run and verify (a) the stale .pt is purged, (b) a non-.pt
+    artefact in the same dir is preserved, (c) the new on-disk count
+    summary fields (train_on_disk / valid_on_disk) reflect the true
+    enzyme + CATH totals.
+    """
+    from catif_rl.data import splits as M
+    importlib.reload(M)
+    M.EXPECTED_COUNTS = {
+        "train_enzyme": 9, "valid_enzyme": 1,
+        "train_cath":   6, "valid_cath":   2,
+        "test_enzyme":  3,
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        enzyme_dir, cath_dir, manifest, out_dir = _setup_synthetic_layout(root, n_enzymes=10)
+
+        # Seed the dest dir with a stale .pt that should be purged.
+        (out_dir / "train").mkdir(parents=True, exist_ok=True)
+        stale = out_dir / "train" / "STALE_OLD_RUN.pt"
+        stale.write_bytes(b"STALE")
+        # And a non-.pt artefact that should be preserved.
+        keeper = out_dir / "train" / "do_not_delete.txt"
+        keeper.write_bytes(b"keep me")
+
+        summary = M.run_full_split(
+            enzyme_graphs_dir=enzyme_dir,
+            cath_graphs_dir=cath_dir,
+            output_dir=out_dir,
+            chain_manifest=manifest,
+        )
+
+        # (a) Stale .pt is gone; (b) the non-.pt artefact is preserved.
+        assert not stale.exists(), "STALE_OLD_RUN.pt should have been purged"
+        assert keeper.exists(), "non-.pt artefact should have been preserved"
+
+        # (c) On-disk total equals train_enzyme + train_cath = 9 + 6 = 15.
+        train_on_disk = sum(1 for f in (out_dir / "train").iterdir()
+                            if f.is_file() and f.suffix == ".pt")
+        assert train_on_disk == 9 + 6, f"expected 15 .pt on disk, got {train_on_disk}"
+        assert summary["counts"]["train_on_disk"] == 15
+        assert summary["counts"]["valid_on_disk"] == 1 + 2
+
+
 if __name__ == "__main__":
     test_split_reproducible_under_fixed_seed()
     test_count_mismatch_raises_by_default()
@@ -176,4 +224,5 @@ if __name__ == "__main__":
     test_skip_count_assert_downgrades_to_warning(_Stub())
 
     test_missing_cath_chain_only_warns()
+    test_idempotent_rerun_purges_stale_files()
     print("PASS")

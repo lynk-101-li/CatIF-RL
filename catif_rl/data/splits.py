@@ -79,6 +79,25 @@ def _safe_copy(src: Path, dst: Path) -> bool:
     return True
 
 
+def _purge_pt(dir_path: Path) -> int:
+    """Remove every ``*.pt`` file directly under ``dir_path`` (non-recursive).
+
+    Used at the top of step 3 to make the split output idempotent: any
+    stale graphs left over from a previous run (different seed, legacy
+    layout, manual experimentation) are cleared before this run's copy.
+    Only ``.pt`` files are touched; any other artefact the user has
+    placed in ``train/`` or ``valid/`` is preserved.
+    """
+    if not dir_path.is_dir():
+        return 0
+    n = 0
+    for f in dir_path.iterdir():
+        if f.is_file() and f.suffix == ".pt":
+            f.unlink()
+            n += 1
+    return n
+
+
 def run_full_split(
     enzyme_graphs_dir: Path,
     cath_graphs_dir: Path,
@@ -172,6 +191,17 @@ def run_full_split(
     train_out.mkdir(parents=True, exist_ok=True)
     valid_out.mkdir(parents=True, exist_ok=True)
 
+    # Idempotency: purge any stale .pt files left over from a previous
+    # split run (different seed, legacy layout, manual experimentation).
+    # Without this, a rerun appends to the destination dirs and the final
+    # count silently exceeds SI Table S4 even though the assertion below
+    # (post-fix, comparing on-disk counts) would catch it.
+    n_train_purged = _purge_pt(train_out)
+    n_valid_purged = _purge_pt(valid_out)
+    if n_train_purged or n_valid_purged:
+        print(f"[splits] purged stale .pt: train={n_train_purged}, "
+              f"valid={n_valid_purged}")
+
     def _copy_batch(src_dir: Path, names: list[str], dst_dir: Path) -> int:
         n = 0
         for name in names:
@@ -189,20 +219,38 @@ def run_full_split(
     n_test_enzyme = len(_list_pt(test_out)) if test_out.is_dir() else 0
 
     # ---- 5. Assert manuscript counts ----------------------------------------
+    # Count final on-disk state (not just what this run copied) so any
+    # discrepancy between intended copy count and actual files on disk
+    # surfaces immediately. Note: train_out / valid_out also contain the
+    # CATH regularisers copied earlier in this run, so the total here is
+    # train_enzyme + train_cath  vs  EXPECTED["train_enzyme"+"train_cath"].
+    train_on_disk = len(_list_pt(train_out))
+    valid_on_disk = len(_list_pt(valid_out))
+    expected_train_total = EXPECTED_COUNTS["train_enzyme"] + EXPECTED_COUNTS["train_cath"]
+    expected_valid_total = EXPECTED_COUNTS["valid_enzyme"] + EXPECTED_COUNTS["valid_cath"]
     counts = {
         "train_enzyme": n_train_enzyme,
         "valid_enzyme": n_valid_enzyme,
         "train_cath":   n_train_cath,
         "valid_cath":   n_valid_cath,
         "test_enzyme":  n_test_enzyme,
+        # New: on-disk totals; verified against the SI Table S4 sums.
+        "train_on_disk": train_on_disk,
+        "valid_on_disk": valid_on_disk,
     }
+    # Treat the on-disk totals as part of the count contract.
+    on_disk_expected = {
+        "train_on_disk": expected_train_total,
+        "valid_on_disk": expected_valid_total,
+    }
+    expected_for_check = {**EXPECTED_COUNTS, **on_disk_expected}
     print(f"[splits] counts:    {counts}")
-    print(f"[splits] expected:  {EXPECTED_COUNTS}  (SI Table S4)")
-    diffs = [k for k in EXPECTED_COUNTS if counts[k] != EXPECTED_COUNTS[k]]
+    print(f"[splits] expected:  {expected_for_check}  (SI Table S4)")
+    diffs = [k for k in expected_for_check if counts[k] != expected_for_check[k]]
     if diffs:
         msg = "[ERROR] split counts do not match SI Table S4:\n"
         for k in diffs:
-            msg += f"  {k}: got {counts[k]} != expected {EXPECTED_COUNTS[k]}\n"
+            msg += f"  {k}: got {counts[k]} != expected {expected_for_check[k]}\n"
         if skip_count_assert:
             print(msg, file=sys.stderr)
         else:
