@@ -189,7 +189,14 @@ their training data:
 
 - EnzymeIF trains against native enzyme structures (`data/raw/enzymeif/train_and_validation/`) plus CATH structural regularizers (`data/raw/enzymeif/cath_v4_2_0/`).
 - CatIF trains from scratch against ESMFold-refolded structures of the 6,034 GDC-curated mutants (`data/raw/catif/`).
-- CatIF-RL initialises from CatIF and uses the same `data/raw/catif/` (or its derived `.pt` graphs) as conditioning during GRPO outer-loop sampling.
+- CatIF-RL initialises from CatIF, but its GRPO outer-loop sampling reads
+  the same native enzyme conditioning pool as GDC
+  (`data/raw/enzymeif/train_and_validation/`), **not** the GDC-mutant
+  CatIF training structures. This keeps the RL sampling distribution
+  aligned with the (structure, substrate) pairs used by GDC and by the
+  supervised stages, and with the held-out benchmark cohort -- all of
+  which condition on native enzyme backbones rather than on GDC-mutant
+  structures.
 
 Only the held-out test set (`data/raw/test/`) is shared across all three stages.
 
