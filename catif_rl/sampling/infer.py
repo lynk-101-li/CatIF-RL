@@ -191,10 +191,17 @@ if __name__ == "__main__":
                 oh = pred_onehot[start:start+count]
                 seq = onehot_to_seq(oh)
                 pt_name = test_ids[global_idx]
-                fasta_fn = os.path.splitext(pt_name)[0] + '.fasta'
+                # Strip the graph-tensor extension from the FASTA record id.
+                # ESMFold (and several other downstream consumers) name the
+                # predicted PDB after the record id; leaving '.pt' in the
+                # header would produce sequence_<n>.pt.pdb, which then fails
+                # to match data/raw/test/sequence_<n>.pdb under
+                # catif_rl.evaluation.structural's default basename contract.
+                stem = os.path.splitext(pt_name)[0]
+                fasta_fn = stem + '.fasta'
                 out_path = os.path.join(args.output_dir, fasta_fn)
                 with open(out_path, 'w') as f:
-                    f.write(f'>{pt_name}\n{seq}\n')
+                    f.write(f'>{stem}\n{seq}\n')
                 start += count
                 global_idx += 1
 

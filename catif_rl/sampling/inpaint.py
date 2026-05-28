@@ -475,15 +475,20 @@ if __name__ == "__main__":
                 oh = pred_onehot[start:start+count]
                 seq = onehot_to_seq(oh)
                 pt_name = test_ids[global_idx]
+                # See infer.py for the rationale: strip the graph-tensor
+                # extension from both the filename and the FASTA record id
+                # so ESMFold-named PDBs match data/raw/test/<stem>.pdb under
+                # the default basename matcher in evaluation/structural.py.
+                stem = os.path.splitext(pt_name)[0]
 
                 if args.output is not None:
                     out_path = args.output
                 else:
-                    fasta_fn = os.path.splitext(pt_name)[0] + '.fasta'
+                    fasta_fn = stem + '.fasta'
                     out_path = os.path.join(args.output_dir, fasta_fn)
 
                 with open(out_path, 'w') as f:
-                    f.write(f'>{pt_name}\n{seq}\n')
+                    f.write(f'>{stem}\n{seq}\n')
 
                 start += count
                 global_idx += 1

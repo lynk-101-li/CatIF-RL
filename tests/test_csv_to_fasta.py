@@ -104,9 +104,60 @@ def test_build_ref_path_resolves_via_regex():
     assert out2.endswith("data/raw/test/sequence_7.pdb"), out2
 
 
+def test_sampler_strips_pt_from_fasta_header():
+    """external-review round 3 B1 regression.
+
+    The benchmark sampler used to write the FASTA header as the raw graph
+    filename, e.g. ``>sequence_7.pt``. ESMFold names predicted PDBs after
+    the FASTA record id, so the refolded file became ``sequence_7.pt.pdb``
+    and the default basename matcher in ``catif_rl.evaluation.structural``
+    would then look for ``data/raw/test/sequence_7.pt.pdb`` -- which does
+    not exist (the real reference is ``sequence_7.pdb``). The structural
+    pass in ``scripts/07_score_benchmark.sh`` silently dropped every
+    in-repo method's pLDDT / RMSD column as a result.
+
+    Fix: strip the ``.pt`` extension before writing the FASTA header in
+    both ``catif_rl/sampling/infer.py`` and ``catif_rl/sampling/inpaint.py``
+    so the predicted PDB filename becomes ``sequence_<n>.pdb`` and the
+    default basename matcher resolves correctly.
+
+    This test asserts (a) the source code of both samplers carries the
+    stem-stripped header and (b) the implied basename matcher contract
+    holds end-to-end.
+    """
+    import pathlib
+    import os
+
+    # (a) Source-level: both samplers emit f'>{stem}\n...' (post-fix),
+    # never f'>{pt_name}\n...' (pre-fix).
+    for relpath in ("catif_rl/sampling/infer.py", "catif_rl/sampling/inpaint.py"):
+        src = pathlib.Path(relpath).read_text()
+        assert ">{pt_name}" not in src, (
+            f"{relpath} still writes the raw pt_name (with '.pt') as the FASTA "
+            "header; this regresses round-3 B1 and breaks the benchmark "
+            "structural-scoring pipeline."
+        )
+        assert ">{stem}" in src, (
+            f"{relpath} does not write a stem-stripped FASTA header; "
+            "expected `f'>{stem}\\n{seq}\\n'`."
+        )
+
+    # (b) End-to-end: given a graph filename `sequence_7.pt`, the stem
+    # (`sequence_7`) becomes the FASTA record id and ESMFold's predicted PDB
+    # is `sequence_7.pdb`; the default `{fname}` matcher then resolves to
+    # `data/raw/test/sequence_7.pdb`.
+    pt_name = "sequence_7.pt"
+    stem = os.path.splitext(pt_name)[0]
+    pred_basename = stem + ".pdb"           # ESMFold-named output
+    assert pred_basename == "sequence_7.pdb"
+    out = build_ref_path("data/raw/test", pred_basename, "{fname}", None)
+    assert out.endswith("data/raw/test/sequence_7.pdb"), out
+
+
 if __name__ == "__main__":
     test_csv_to_fasta_dedup_and_id_counter()
     test_csv_to_fasta_missing_columns()
     test_fasta_dir_to_combined_concat_in_order()
     test_build_ref_path_resolves_via_regex()
+    test_sampler_strips_pt_from_fasta_header()
     print("PASS")
