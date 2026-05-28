@@ -1,4 +1,4 @@
-"""Smoke test for catif_rl.data.splits (external-review round 2 B1).
+"""Smoke test for catif_rl.data.splits.
 
 The full SI Table S4 run requires 6,290 + 18,629 + 1,423 = 26,342 .pt files,
 which is too heavy for CI. This test exercises the same code path against
@@ -165,7 +165,7 @@ def test_missing_cath_chain_only_warns():
 
 
 def test_idempotent_rerun_purges_stale_files():
-    """external-review round 3 M1 regression.
+    """Regression test for splitter idempotency.
 
     Re-running the splitter on the same output_dir must NOT leave stale
     .pt files behind. We pollute train/ with a bogus stale .pt before

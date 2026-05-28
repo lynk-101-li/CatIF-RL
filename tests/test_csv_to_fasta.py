@@ -1,4 +1,4 @@
-"""external-review round 2 B2: CSV->FASTA + directory-merge contract for ESMFold input.
+"""CSV->FASTA + directory-merge contract for ESMFold input.
 
 Covers:
 
@@ -105,7 +105,7 @@ def test_build_ref_path_resolves_via_regex():
 
 
 def test_sampler_strips_pt_from_fasta_header():
-    """external-review round 3 B1 regression.
+    """Regression test for the sampler FASTA header contract.
 
     The benchmark sampler used to write the FASTA header as the raw graph
     filename, e.g. ``>sequence_7.pt``. ESMFold names predicted PDBs after
@@ -134,8 +134,8 @@ def test_sampler_strips_pt_from_fasta_header():
         src = pathlib.Path(relpath).read_text()
         assert ">{pt_name}" not in src, (
             f"{relpath} still writes the raw pt_name (with '.pt') as the FASTA "
-            "header; this regresses round-3 B1 and breaks the benchmark "
-            "structural-scoring pipeline."
+            "header; this regresses the sampler-header contract and breaks the "
+            "benchmark structural-scoring pipeline."
         )
         assert ">{stem}" in src, (
             f"{relpath} does not write a stem-stripped FASTA header; "

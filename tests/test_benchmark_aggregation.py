@@ -13,7 +13,7 @@ fixture under ``tests/fixtures/benchmark_smoke/`` and verifies that:
 4. The Δlog10 k_cat aggregation is non-degenerate (CatIF-RL R3 should be
    higher than CatIF on the fixture).
 
-Catches every regression class behind external-review round 2 blocker B4:
+Catches every regression class for the benchmark aggregation contract:
 
 - Wrapper / aggregator filename drift
 - Method-name mapping drift

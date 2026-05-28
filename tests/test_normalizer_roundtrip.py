@@ -1,4 +1,4 @@
-"""Round-trip test for the frozen GDC normalizer (external-review round 2 M1).
+"""Round-trip test for the frozen GDC normalizer.
 
 Goal: prove that the same input data, scored under ``--normalizer``,
 produces a reward scale that is *invariant* to the data distribution.
@@ -13,7 +13,7 @@ The test does this by:
    saved scale.
 4. Verifying that recomputing q10 / q90 on the small batch would have
    produced a different scale — i.e. that NOT freezing the normalizer
-   really does cause drift (this is the bug round-2 flagged).
+   really does cause drift (the drift bug this test catches).
 
 The test uses only the in-process helpers ``_compute_one_normalizer`` and
 ``_apply_normalizer`` from ``catif_rl.reward.gdc``; no subprocess, no

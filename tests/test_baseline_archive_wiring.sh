@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# external-review round 2 B5: scripts/06_sample_benchmark.sh's archive-aware branch
-# must (a) abort with a useful error when the archive isn't staged, and
+# Smoke test for scripts/06_sample_benchmark.sh's archive-aware branch.
+# It must (a) abort with a useful error when the archive isn't staged, and
 # (b) symlink the right per-seed FASTA dir into $OUT_BASE when it is.
 #
 # This test exercises only the case-branch logic from 06_sample_benchmark.sh
