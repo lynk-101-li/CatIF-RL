@@ -92,6 +92,13 @@ jobs:
             catif_rl.evaluation.build_master
             catif_rl.evaluation.statistics
             catif_rl.data.esmfold_backbones
+            catif_rl.data.graph_construction
+            catif_rl.data.splits
+            catif_rl.sampling.batch
+            catif_rl.sampling.infer
+            catif_rl.sampling.inpaint
+            catif_rl.training.train_supervised
+            catif_rl.training.grpo
           )
           for m in "${MODS[@]}"; do
             out=$(python -m "$m" --help 2>&1 || true)
