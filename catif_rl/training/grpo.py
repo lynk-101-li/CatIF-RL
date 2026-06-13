@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # Editdate : Jan 30
 # Author   : Yanheng Li
-# Device   : NVIDIA RTX 5060 Ti (16 GB)
+# Device   : NVIDIA RTX 4060 Ti (16 GB)
 
 # =============================================================================
 # grpo_trainer6.py -- main changes vs. grpo_trainer4.py

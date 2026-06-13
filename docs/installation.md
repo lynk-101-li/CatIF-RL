@@ -2,7 +2,7 @@
 
 CatIF-RL was developed on Linux with CUDA 11.7 and a single RTX-class GPU
 (EnzymeIF pretraining used an RTX 4090 24 GB cloud node; CatIF supervised and
-all CatIF-RL refinement ran on a local RTX 5060 Ti 16 GB).
+all CatIF-RL refinement ran on a local RTX 4060 Ti 16 GB).
 
 ## 1. Clone the repository
 

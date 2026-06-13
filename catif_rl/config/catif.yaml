@@ -2,7 +2,7 @@
 # Selected checkpoint: epoch 228 (lowest validation cross-entropy).
 # Trained from scratch on the 6,034 activity-positive GDC variants; NOT a
 # continuation of EnzymeIF.
-# Hardware used by the authors: NVIDIA RTX 5060 Ti 16 GB (local).
+# Hardware used by the authors: NVIDIA RTX 4060 Ti 16 GB (local).
 
 run:
   name: catif

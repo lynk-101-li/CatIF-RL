@@ -11,8 +11,8 @@ re-run only repeats the affected stage.
 | 1 | `scripts/01_build_dataset.sh` | §2.1 / SI Table S4 | `data/process/{train,valid,test}/*.pt` | CPU + ESMFold GPU (24 GB) |
 | 2 | `scripts/02_train_enzymeif.sh` | §2.2 / SI Table S1 | `runs/enzymeif/best_epoch467.pt` | 1 x RTX 4090 (24 GB), days |
 | 3 | `scripts/03_run_gdc.sh` | §2.3 / SI Table S5 | `runs/gdc/activity_positive.csv` (~6,034 variants) | Sampling + predictor wall-clock |
-| 4 | `scripts/04_train_catif.sh` | §2.4 / SI Table S2 | `runs/catif/best_epoch228.pt` | 1 x RTX 5060 Ti (16 GB), days |
-| 5 | `scripts/05a_rl_round1.sh` -> `05b_rl_round2.sh` -> `05c_rl_round3.sh` | §2.5 / SI Table S3 + Alg S2 | `runs/grpo_round{1,2,3}/policy_epoch02.pt` | 1 x RTX 5060 Ti (16 GB), hours per round |
+| 4 | `scripts/04_train_catif.sh` | §2.4 / SI Table S2 | `runs/catif/best_epoch228.pt` | 1 x RTX 4060 Ti (16 GB), days |
+| 5 | `scripts/05a_rl_round1.sh` -> `05b_rl_round2.sh` -> `05c_rl_round3.sh` | §2.5 / SI Table S3 + Alg S2 | `runs/grpo_round{1,2,3}/policy_epoch02.pt` | 1 x RTX 4060 Ti (16 GB), hours per round |
 | 6 | `scripts/06_sample_benchmark.sh` | §2.7 / SI Table S6 | `runs/benchmark/<method>/seed_<s>/*.fasta` (11 methods x 5 seeds) | Mostly inference |
 | 7 | `scripts/07_score_benchmark.sh` | §2.7 / SI Tables S7-S10 | `runs/benchmark_scores/{master_per_protein.csv, tables/*}` | Subprocess to 3 predictor envs + ESMFold refold of one seed |
 | 8 | `scripts/08_run_case_studies.sh` | §3.5 / SI Tables S11-S12 | `runs/case_studies/<EC>_<organism>/` | Lightweight (4 single-seed runs) |

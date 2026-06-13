@@ -141,7 +141,7 @@ def create_batch_mask(batch, user_indices, device, semantics='fix'):
 
     return mask
 
-def repaint_ddim_sample(diffusion_model, data, mask, gt_x, step=100, jump_n=10, diverse=True):
+def repaint_ddim_sample(diffusion_model, data, mask, gt_x, step=100, jump_n=5, diverse=True):
     """
     RePaint sampling with optional resampling (jump).
     """
@@ -295,8 +295,8 @@ if __name__ == "__main__":
                         "Complement of --fix.")
     p.add_argument('--mask', '--mask_indices', dest='mask_legacy', type=str, default="",
                    help="DEPRECATED alias of --fix; will be removed in a future release")
-    p.add_argument('--repaint_jump_n', '--u', dest='repaint_jump_n', type=int, default=10,
-                   help="repaint resampling count (default 10); 1 disables the jump-back")
+    p.add_argument('--repaint_jump_n', '--u', dest='repaint_jump_n', type=int, default=5,
+                   help="repaint resampling count (default 5); 1 disables the jump-back")
 
     args = p.parse_args()
 
