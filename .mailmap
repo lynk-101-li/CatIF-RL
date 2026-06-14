@@ -1,0 +1,5 @@
+# Canonical author identity for the project.
+# Normalizes given-name/family-name ordering for the same address so that
+# git shortlog, git log, and the hosting platform's contributor view all
+# show a single consistent name.
+Yanheng Li <yannhengli@gmail.com> Li Yanheng <yannhengli@gmail.com>
