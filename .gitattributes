@@ -1,0 +1,4 @@
+# Treat the demo / analysis notebooks under notebooks/ as documentation so
+# the repository language statistics reflect the Python package (catif_rl/
+# plus the shell entry points) rather than the tutorial notebooks.
+notebooks/*.ipynb linguist-documentation
